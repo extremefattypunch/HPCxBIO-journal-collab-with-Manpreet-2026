@@ -6,6 +6,7 @@ Extends Manpreet Singh's Triton/TensorNet-v1 paper (`../literature/32_*`) to **T
 custom kernels this round).
 
 ## 0. Reproducibility
+
 - torchmd-net `main` @ **`833c07708e`** · torch **2.13.0+cu130** · triton **3.7.1** ·
   nvidia-cutlass-dsl **4.6.1** · **Warp 1.15.0** · numpy 2.5.1 · Python 3.12.13 (conda env `tn2prof`).
 - GPU cap **(12, 0)**; driver 610.43.02 / CUDA-UMD 13.3; CUDA toolkit 13.3 at `/opt/cuda`.
@@ -13,12 +14,13 @@ custom kernels this round).
   (neighbors_brute, graph_transform, message_passing, de/compose_tensor, tensor_matmul_o3/so3,
   tensor_norm3, + their `_bwd`). So the Warp-optimized backbone is the *default* on this GPU.
 - Model: `TensorNet2(hidden=128, q_dim=16, num_layers=2, num_rbf=32, cutoff=4.5, output_charges=True)`
-  + `ScalarPlusWeightedCoulomb(coulomb_cutoff=None → all-to-all O(N²))` + `TorchMD_Net(derivative=True)`.
+  - `ScalarPlusWeightedCoulomb(coulomb_cutoff=None → all-to-all O(N²))` + `TorchMD_Net(derivative=True)`.
 - **All three tools ran**: PyTorch Profiler + CUDA-event timing (§2–4), **Nsight Systems 2026.1.3**
   (§4/§7 timeline), **Nsight Compute 2026.2.1** (§7 per-kernel counters). Perf counters unlocked
   (`RmProfilingAdminOnly=0`).
 
 ## 1. Workloads (measured; synthetic jittered-lattice at ~0.09 atoms/Å³, batch 1)
+
 | ID | N atoms | Coulomb | ms/step | steps/s | peak VRAM |
 |----|--------:|---------|--------:|--------:|----------:|
 | A  | 21 | all-to-all | 24.5 | 40.7 | 0.11 GB |
@@ -37,6 +39,7 @@ custom kernels this round).
 ## 2. Stage 1 — operator attribution (PyTorch Profiler)  [v2 analogue of the paper's Table 1]
 
 ### 2a. Warp path, all-to-all Coulomb, N=1000 (Self CUDA time; total 463.8 ms / 10 steps ≈ 46 ms/step)
+
 | Kernel / op | Self CUDA % | note |
 |-------------|------------:|------|
 | `aten::mul` | **30.8** | Coulomb all-pairs elementwise (`q_i*q_j`, `fc*q_ij/d_ij`, `*qweights`); 20.6 GB transient, 1280 calls |
@@ -58,6 +61,7 @@ custom kernels this round).
 **≥42%** · gather/scatter+their backward ≈ **21%** · activation ≈ **12%** · **Warp backbone ≈ 2.5%**.
 
 ### 2b. Eager path (Warp OFF), N=1000 — reproduces the v1 paper's regime
+
 With the Warp backbone disabled, the **message-passing index ops resurface**: `aten::_index_put_impl_`
 8.6%, `vectorized_gather` 5.1%, `aten::index` 3.4%, `aten::index_add` 3.3%, `indexFuncLargeIndex`
 3.2%, `indexing_backward` 4.1+3.7% → backbone gather/scatter ≈ **15–20%** (vs **2.5%** with Warp).
@@ -68,6 +72,7 @@ at 35.2%** — the new term dominates regardless of the backbone path.
 v1 time → ~2.5% here). The dominant cost has **moved to the new v2 all-pairs Coulomb** + the GEMM MLPs.
 
 ## 3. Scaling & ablation — the O(N²) Coulomb is isolated and quadratic
+
 | N | total ms | scalar-only ms | **Coulomb Δ (ms)** | Coulomb share |
 |---|--------:|---------------:|-------------------:|--------------:|
 | 1000 | 49.8 | 35.1 | **14.7** | **30%** |
@@ -82,6 +87,7 @@ v1 time → ~2.5% here). The dominant cost has **moved to the new v2 all-pairs C
   "Coulomb off" — use the scalar-only ablation above for that.
 
 ## 4. Small-molecule regime — launch-bound (CUDA-graph opportunity)
+
 N=21 (24.5 ms) ≈ N=250 (24.9 ms): a **flat ~24 ms/step floor** independent of size ⇒ dominated by
 **kernel-launch/Python-dispatch overhead**, not compute (many small kernels). This is the regime where
 CUDA-graph capture (AceFF's route to >100 steps/s) pays off; our harness does not capture graphs.
@@ -89,7 +95,9 @@ CUDA-graph capture (AceFF's route to >100 steps/s) pays off; our harness does no
 ## 5. ANSWERS
 
 ### Q1 — Where & how do we implement GPU acceleration?
+
 Ranked by measured impact (N≥1000, MD inference+forces on sm_120):
+
 1. **The new all-pairs Coulomb energy (`ScalarPlusWeightedCoulomb`, `coulomb_cutoff=None`)** — #1 op
    (`aten::mul` 30–35%), grows to ~**49% of step time at N=2000**, ~O(N²). It is a chain of
    **memory-bound elementwise (mul/div) + gather + reduction + scatter over ~N²/2 × 48-channel
@@ -111,6 +119,7 @@ Ranked by measured impact (N≥1000, MD inference+forces on sm_120):
 5. **Small systems:** the win is **CUDA-graph capture** (kill the ~24 ms launch floor), not kernels.
 
 ### Q2 — Triton or CuTe DSL?
+
 **Triton.** The hot path is **irregular, memory-bound gather/scatter + all-pairs Coulomb elementwise**
 — Triton's exact sweet spot — with **no large isolated dense Tensor-Core-bound GEMM** left to justify
 CuTe (the GEMMs are already optimal via cuBLAS/CUTLASS, and individually ≤11%). **Nsight Compute
@@ -124,6 +133,7 @@ dense TC-bound GEMM (none here). Escalation ladder outcome on sm_120: **eager/Wa
 fragile on sm_120) → Triton**; stop at Triton.
 
 ## 6. Why Nsight Compute adds value over the v1 (PyTorch-only) study — realized
+
 Stage-1 localized *what/how much*; Nsight Compute supplied the *why* the v1 paper lacked, and it
 **changed the conclusion per stage**: the three hot regions have **three different hardware
 signatures** (memory-saturated / near-optimal / launch-bound), which alone dictate three different
@@ -133,6 +143,7 @@ these. Details in §7.
 ## 7. Nsight Compute + Nsight Systems — RESULTS (N=1000, one MD step, sm_120)
 
 ### 7a. Nsight Systems timeline
+
 - **Workload A (21 atoms): launch-bound.** Per-kernel GPU *execution* is ~1 µs (`KMed` ≈ 1.0–1.8 µs)
   while wall time is dominated by `cudaLaunchKernel` + host syncs (the static-shapes/all-to-all path
   emits `_assert_async` / `compare_scalar` / `reduce<bool>` sync kernels each step). The GPU is idle
@@ -142,6 +153,7 @@ these. Details in §7.
   ≈ 2.5%. Reports: `results/timeline_A21.nsys-rep`, `results/timeline_B1000.nsys-rep`.
 
 ### 7b. Nsight Compute per-kernel counters (roofline)
+
 | Stage / kernel | dur (µs) | **DRAM %** | SM % | Occ % | Regime → remedy |
 |---|---:|---:|---:|---:|---|
 | **Coulomb** `q·q`/damp elementwise | **769** | **91.2** | 1.8 | 86 | **memory-bound, DRAM-saturated** → fuse to eliminate [~500k×48] intermediates; lower precision; fewer pairs |
@@ -162,6 +174,7 @@ too small to fill the GPU (7–8% occupancy) ⇒ a launch/fusion problem, amplif
 Reports: `results/ncu_coulomb.ncu-rep`, `ncu_mp.ncu-rep`, `ncu_qeq.ncu-rep`.
 
 ## 8. Follow-on (out of scope this round)
+
 1. **Triton fused pairwise-Coulomb kernel** (gather→charge-product→damp→channel-mean→scatter) —
    expect large intermediate-memory + launch reductions; validate vs the 30–49% budget.
 2. **Algorithmic Coulomb** (cutoff+reaction-field / PME / FMM) to break the O(N²) asymptote — the

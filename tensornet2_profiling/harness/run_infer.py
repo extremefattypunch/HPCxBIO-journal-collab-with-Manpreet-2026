@@ -120,6 +120,8 @@ def main():
     ap.add_argument("--num-layers", type=int, default=2)
     ap.add_argument("--q-dim", type=int, default=16)
     ap.add_argument("--dtype", choices=["fp32", "fp64"], default="fp32")
+    ap.add_argument("--precision", choices=["fp64", "fp32", "fp16", "mixed_bf16"], default=None,
+                    help="overrides --dtype; mixed_bf16 = fp32 model + BF16 Coulomb edge intermediates")
     ap.add_argument("--force-eager", action="store_true",
                     help="force pure-PyTorch backbone (OPT=False) instead of Warp")
     ap.add_argument("--nvtx", action="store_true", help="add per-module NVTX hooks")
@@ -128,7 +130,11 @@ def main():
                     help="single measured step inside NVTX ranges (for Nsight Compute)")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
-    args.torch_dtype = torch.float32 if args.dtype == "fp32" else torch.float64
+    _PMAP = {"fp64": torch.float64, "fp32": torch.float32,
+             "fp16": torch.float16, "mixed_bf16": torch.float32}
+    args.precision = args.precision or args.dtype        # --precision overrides --dtype
+    args.torch_dtype = _PMAP[args.precision]
+    args.mixed = args.precision == "mixed_bf16"
     cc = None if str(args.coulomb_cutoff).lower() == "none" else float(args.coulomb_cutoff)
 
     if not torch.cuda.is_available():
@@ -136,6 +142,9 @@ def main():
     device = "cuda"
     torch.cuda.reset_peak_memory_stats()
 
+    if args.mixed:
+        from mixed_precision import patch_coulomb
+        patch_coulomb(torch.bfloat16)   # patch BEFORE the NVTX wrap so 'coulomb' range still fires
     _wrap_nvtx_methods()
     # The pure-PyTorch (non-Warp) backbone has a static-shapes dummy-atom off-by-one in
     # TensorNet2; use dynamic shapes for the eager path (Warp path keeps static_shapes=True).
@@ -151,7 +160,7 @@ def main():
         _add_module_nvtx_hooks(model)
 
     z, pos, batch, n = make_inputs(args, device)
-    print(f"[config] N={n} {info} dtype={args.dtype} coulomb_cutoff={cc}")
+    print(f"[config] N={n} {info} precision={args.precision} coulomb_cutoff={cc}")
 
     # warmup (Warp/Triton JIT, cuBLAS, allocator)
     for _ in range(args.warmup):
