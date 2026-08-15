@@ -1,0 +1,19 @@
+# Data and checkpoints are fetched by scripts/00_environment.py and verified by
+# checksum; they are never committed. See results/manifests/ for their provenance.
+data/
+models/
+third_party/
+
+# Raw experiment output: large, machine-generated, regenerable. Manifests and
+# processed tables ARE committed -- they are what the paper cites.
+results/raw/
+*.nsys-rep
+*.ncu-rep
+*.sqlite
+*.qdrep
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.ipynb_checkpoints/
