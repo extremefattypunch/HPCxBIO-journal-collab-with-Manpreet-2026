@@ -69,6 +69,18 @@ one: at $K\le4$ none of these estimators preserves the exact top-5\% acquisition
 molecular systems. Fourth, we show what does work --- a conservatively calibrated screening gate
 with a low-rank control variate --- and quantify both its decision quality and its wall-clock saving.
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.86\textwidth]{figures/fig1_schematic.png}
+\caption{What ForceSketch replaces. All $M$ head energies come from one forward pass through the
+shared trunk, but forces do not: each head-space direction costs its own reverse pass, so exact
+force disagreement needs $M$ lanes. ForceSketch spends $K{+}1$, and --- since the approximation is
+not accurate enough to \emph{replace} exact uncertainty at $K\le4$ (Section~5.1) --- its score
+feeds a conservatively calibrated gate that runs the exact path only where the bound cannot rule
+out the high-uncertainty threshold.}
+\label{fig:schematic}
+\end{figure}
+
 \section{Problem formulation}
 For Cartesian coordinates $x\in\mathbb{R}^{D}$, $D=3N$, a multi-head committee defines energies
 $e(x)=[E_1(x),\dots,E_M(x)]^{\mathsf T}$ and head forces $f_m=-\nabla_x E_m$, collected as

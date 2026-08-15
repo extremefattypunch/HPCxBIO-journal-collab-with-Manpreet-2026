@@ -101,3 +101,105 @@ def screening_curve(screening_jsonl: Path, out: Path, *, title: str) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=160)
     plt.close(fig)
+
+
+def method_schematic(out: Path, *, M: int = 8, K: int = 4, r0: int = 2) -> None:
+    """Figure 1 (spec SS53): what ForceSketch replaces, and where the gate sits.
+
+    The spec's sketch stops at "exact vs approximate force-UQ". Since the result
+    that holds is screening rather than replacement, this figure carries one step
+    further: the approximate score feeds a calibrated gate that either clears a
+    structure or falls back to the exact computation. Drawing it any other way
+    would advertise a claim the data does not support.
+    """
+    import matplotlib.patches as mp
+
+    fig, ax = plt.subplots(figsize=(7.4, 5.4))
+    ax.set_xlim(0, 100); ax.set_ylim(0, 100); ax.axis("off")
+
+    def box(x0, y0, x1, y1, fc, ec="0.3"):
+        ax.add_patch(mp.FancyBboxPatch((x0, y0), x1 - x0, y1 - y0,
+                                       boxstyle="round,pad=0.4", fc=fc, ec=ec, lw=1.1))
+
+    def arrow(x1, y1, x2, y2, c="0.35", lw=1.2):
+        ax.annotate("", xy=(x2, y2), xytext=(x1, y1),
+                    arrowprops=dict(arrowstyle="-|>", color=c, lw=lw,
+                                    shrinkA=0, shrinkB=0))
+
+    C_TRUNK, C_HEAD = "#d6e4f2", "#eef4fa"
+    C_EXACT, C_FS, C_GATE = "#f7dede", "#dcefe4", "#fdf1d8"
+    MID = 50.0
+
+    # --- shared trunk: ONE forward ---------------------------------------
+    box(28, 86, 72, 96, C_TRUNK)
+    ax.text(MID, 91, "shared message-passing trunk", ha="center", va="center",
+            fontsize=9.5, weight="bold")
+    ax.text(MID, 98.5, "one forward pass  \u2014  all $M$ head energies", ha="center",
+            fontsize=8, style="italic", color="0.4")
+    arrow(MID, 86, MID, 82.5)
+
+    # --- M heads ----------------------------------------------------------
+    w, gap = 4.0, 1.0
+    total = M * w + (M - 1) * gap
+    x0 = MID - total / 2
+    for i in range(M):
+        box(x0 + i * (w + gap), 75.5, x0 + i * (w + gap) + w, 81.5, C_HEAD)
+    ax.text(MID, 72, f"$M={M}$ scalar energy heads,  $e(x)\\in\\mathbb{{R}}^{{{M}}}$",
+            ha="center", fontsize=8.5)
+
+    # --- the reverse-mode split -------------------------------------------
+    ax.text(MID, 68.8, "forces require reverse mode: one pass per head-space direction",
+            ha="center", fontsize=8, style="italic", color="0.4")
+    ax.plot([MID, MID], [66.5, 63.5], color="0.35", lw=1.2)
+    ax.plot([23, 77], [63.5, 63.5], color="0.35", lw=1.2)
+    arrow(23, 63.5, 23, 61); arrow(77, 63.5, 77, 61)
+
+    # --- the two paths ----------------------------------------------------
+    box(3, 40, 45, 61, C_EXACT)
+    ax.text(24, 58, "EXACT", ha="center", fontsize=9.5, weight="bold", color="#8c2f2f")
+    ax.text(24, 50.5,
+            "1 mean direction  $s_0=\\frac{1}{M}\\mathbf{1}$\n"
+            f"+ ${M-1}$ centered directions $q_j$",
+            ha="center", va="center", fontsize=8.5)
+    ax.text(24, 43, f"$\\mathbf{{{M}}}$ reverse lanes", ha="center", fontsize=9,
+            weight="bold")
+
+    box(55, 40, 97, 61, C_FS)
+    ax.text(76, 58, "FORCESKETCH", ha="center", fontsize=9.5, weight="bold",
+            color="#2f6b4a")
+    ax.text(76, 50.5,
+            "1 mean direction  $s_0$\n"
+            f"+ $r_0={r0}$ leading directions (exact)\n"
+            f"+ ${K-r0}$ Haar residual directions",
+            ha="center", va="center", fontsize=8.5)
+    ax.text(76, 43, f"$\\mathbf{{{K+1}}}$ reverse lanes", ha="center", fontsize=9,
+            weight="bold")
+
+    ax.text(24, 36.5, "exact  $v_d$,  $S(x)$", ha="center", fontsize=8.5)
+    ax.text(76, 36.5, "unbiased  $\\hat v_d$,  $\\hat S(x)$", ha="center", fontsize=8.5)
+    arrow(76, 40, 76, 30.5)
+
+    # --- the screening gate ----------------------------------------------
+    box(52, 10, 97, 29, C_GATE)
+    ax.text(74.5, 25.5, "screening gate", ha="center", fontsize=9, weight="bold",
+            color="#8a6d1f")
+    ax.text(74.5, 17.5,
+            "$U(x)=c_\\alpha\\,\\hat S(x)$   (calibrated, conservative)\n\n"
+            "$U(x)<\\tau$   $\\Rightarrow$   skip exact force-UQ\n"
+            "otherwise   $\\Rightarrow$   fall back to exact",
+            ha="center", va="center", fontsize=8.5)
+
+    arrow(52, 19.5, 26, 19.5, c="#b03030", lw=1.5)
+    ax.text(38, 21.6, "fallback", ha="center", fontsize=8.5, color="#b03030",
+            weight="bold")
+    ax.plot([24, 24], [36.8, 19.5], color="#b03030", lw=1.2, ls=":")
+
+    ax.text(MID, 3.5,
+            f"$M={M}$ reverse lanes  $\\rightarrow$  $K+1={K+1}$, "
+            "with the exact path run only where the calibrated bound\n"
+            "cannot rule out the high-uncertainty threshold $\\tau$",
+            ha="center", fontsize=8.5, color="0.2")
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=200, bbox_inches="tight")
+    plt.close(fig)
