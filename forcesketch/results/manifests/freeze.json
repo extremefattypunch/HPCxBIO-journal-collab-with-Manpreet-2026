@@ -1,0 +1,241 @@
+{
+  "frozen": false,
+  "git_commit": "43cf8591812c26b7d7681894e98bdca9be4b9c4f",
+  "git_dirty": true,
+  "n_bootstrap_resamples": 10000,
+  "seeds": {
+    "schema_version": 1,
+    "frozen": true,
+    "frozen_at": "2026-08-15",
+    "sketch_seeds": [
+      1000003,
+      1000033,
+      1000037,
+      1000039,
+      1000081,
+      1000099,
+      1000117,
+      1000121,
+      1000133,
+      1000151
+    ],
+    "unit_test_seed": 20260820,
+    "calibration_split_seed": 20260901,
+    "bootstrap_seed": 20260902
+  },
+  "cost_model_ms": {
+    "intercept": 10.375472409384578,
+    "slope_per_lane": 11.775435027622041
+  },
+  "environment": {
+    "python": "3.12.13",
+    "platform": "Linux-7.0.14-arch1-1-x86_64-with-glibc2.43",
+    "lockfile_sha256": "28f4ee986eae31f91f23083c3c34f69e134dec55c386bcb45eac43e706eb8df1",
+    "smoke_test": true
+  },
+  "checkpoints": {
+    "disjoint": {
+      "force_rmse_committee_mev_A": 206.48137211758672,
+      "force_rmse_per_head_mev_A": [
+        200.03361405432065,
+        208.57188320840072,
+        205.06411330833257,
+        211.5070562597044,
+        200.10352044408395,
+        217.06681982131488,
+        203.34209486922242,
+        206.1618749753142
+      ],
+      "head_rmse_spread_ratio": 1.0851517173627065,
+      "median_atom_disagreement_mev_A": 33.4833249131789,
+      "mean_atom_disagreement_mev_A": 39.22866448720247,
+      "energy_mae_mev_per_atom": 4.034882708824794,
+      "median_head_energy_std_mev": 30.56232768134661,
+      "n_frames": 200,
+      "checkpoint_hash": "71ab2b8b07cc",
+      "path": "models/zenodo/3BPA/trainset_100/multihead-disjoint/multihead_committee_stagetwo.model"
+    },
+    "overlapping": {
+      "force_rmse_committee_mev_A": 180.33748398881,
+      "force_rmse_per_head_mev_A": [
+        174.8108276627626,
+        181.59542026795262,
+        173.14300059808372,
+        188.78653645278004,
+        171.04728056839366,
+        190.26982507789575,
+        174.4861285743882,
+        188.56085270822317
+      ],
+      "head_rmse_spread_ratio": 1.1123814681275561,
+      "median_atom_disagreement_mev_A": 12.809139628003848,
+      "mean_atom_disagreement_mev_A": 16.086674176184033,
+      "energy_mae_mev_per_atom": 3.8844359441551477,
+      "median_head_energy_std_mev": 23.869484377785874,
+      "n_frames": 200,
+      "checkpoint_hash": "7d00cf1eb986",
+      "path": "models/zenodo/3BPA/trainset_100/multihead-overlapping/multihead_committee_stagetwo.model"
+    },
+    "same": {
+      "force_rmse_committee_mev_A": 190.99382544574965,
+      "force_rmse_per_head_mev_A": [
+        189.22934623225092,
+        190.65497565494013,
+        191.90459756067756,
+        191.3243128209812,
+        191.92227307556553,
+        191.8954919879085,
+        189.05675258866026,
+        191.96285364501324
+      ],
+      "head_rmse_spread_ratio": 1.0153715803141712,
+      "median_atom_disagreement_mev_A": 7.1660140923500855,
+      "mean_atom_disagreement_mev_A": 7.796378513871445,
+      "energy_mae_mev_per_atom": 4.963449425864653,
+      "median_head_energy_std_mev": 12.525151697834902,
+      "n_frames": 200,
+      "checkpoint_hash": "a90f5db7262a",
+      "path": "models/zenodo/3BPA/trainset_100/multihead-same/multihead_committee_stagetwo.model"
+    }
+  },
+  "datasets": {
+    "iso_atoms.xyz": {
+      "bytes": 504,
+      "sha256": "e12a2465a2612bf38fd5dabdf64d4b57fc58ce9610a858c54ea1142d517c053f"
+    },
+    "test_1200K.xyz": {
+      "bytes": 6437539,
+      "sha256": "3c00e89bdb95421329dee018b5cf193a048890400b858ab64ad31b598c1fa2d2"
+    },
+    "test_1200K_ref.xyz": {
+      "bytes": 6433261,
+      "sha256": "062b237586cb301029257e83cbc95de36a4da51cb6882b0af6de6b08b9c22071"
+    },
+    "test_300K.xyz": {
+      "bytes": 5023260,
+      "sha256": "8678c4c2e3ce3d628faa0792ccaa9b60970ba5a13ce4db9de83f99bbe42622ef"
+    },
+    "test_300K_ref.xyz": {
+      "bytes": 5019922,
+      "sha256": "28fc72598fa62fef428e8a7f2b2f9c0d2f449ac3868c97f4f63ba7dd1700a5f7"
+    },
+    "test_600K.xyz": {
+      "bytes": 6434399,
+      "sha256": "c49009d958c494b59acb247b8bddc715998976a359d11c682937c14535d145a0"
+    },
+    "test_600K_ref.xyz": {
+      "bytes": 6430123,
+      "sha256": "7eb43614334cd650def5b76b5b327e96a63a73b301b0cdda00c4a6fa6f65e6ea"
+    },
+    "train_300K.xyz": {
+      "bytes": 1504880,
+      "sha256": "d109971fab90e2231ad931a83eb704c8d940f5c7d7a8de27fe3b84ea18634c0a"
+    },
+    "train_300K_100.xyz": {
+      "bytes": 300759,
+      "sha256": "7e4d945b5f28740b3604a84660eee231767b0ef6ac44eab3cc755a72ee7416b6"
+    },
+    "val_300K_300.xyz": {
+      "bytes": 902333,
+      "sha256": "36aa5b1bb1247d37a3c6568bfd1742cf735a77530f11add4d45e0065c33d50dc"
+    }
+  },
+  "raw_results": {
+    "01_exact_reproduction_disjoint_test_1200K.jsonl": {
+      "records": 1,
+      "sha256": "a0a789c56a42acc3e9d2f4fa89c3cc77d4b22e0b6f197fb492b2a71cc579a23e"
+    },
+    "01_exact_reproduction_overlapping_test_1200K.jsonl": {
+      "records": 1,
+      "sha256": "23c58294037c76c1cffe31d90641d0fbf2e0008990732d645a89f9c038ffa00f"
+    },
+    "01_exact_reproduction_rmd17-disjoint_aspirin.jsonl": {
+      "records": 1,
+      "sha256": "d8c7241f0f4e0513dc4755cbd2d270b1d717979506402fed5a67493595ce3a56"
+    },
+    "01_exact_reproduction_rmd17-disjoint_azobenzene.jsonl": {
+      "records": 1,
+      "sha256": "b1a802e50bc7d47c9834d079a4e00354a1253f2783b08fa78c0dbc9c22308897"
+    },
+    "01_exact_reproduction_rmd17-disjoint_ethanol.jsonl": {
+      "records": 1,
+      "sha256": "a6e534d9858347943f136c46722ce5de5ba2d94c782460070b58b54d3607e0e2"
+    },
+    "01_exact_reproduction_same_test_1200K.jsonl": {
+      "records": 1,
+      "sha256": "4e21953d1b5fedbc131d63285cd4ef816c1fe46c6832402bef6be883c9593093"
+    },
+    "03_sketch_fidelity_disjoint_test_1200K.jsonl": {
+      "records": 280,
+      "sha256": "8cc1082713db809657b07f2d6a9c59df62d9693924662109b6418351940d43df"
+    },
+    "03_sketch_fidelity_rmd17-disjoint_aspirin.jsonl": {
+      "records": 280,
+      "sha256": "7561eac524fd68fd93c2f6a45082ab796afe8adceef6cf908c4f490034586c09"
+    },
+    "03_sketch_fidelity_rmd17-disjoint_azobenzene.jsonl": {
+      "records": 280,
+      "sha256": "ed1ad596019712ab6a7b8cdbd7dccd0bec8fc7c790d6bb06ea874d4d0c01d433"
+    },
+    "03_sketch_fidelity_rmd17-disjoint_ethanol.jsonl": {
+      "records": 280,
+      "sha256": "0cefe80a13d5a9cd802315cda697267d1d466f56d0c7563f2252cf12f1542dce"
+    },
+    "04_bootstrap_disjoint_test_1200K.jsonl": {
+      "records": 16,
+      "sha256": "5e201c88289cbf880bacedc32742ce8d9cf2cea2a20ddc81120a1353eb70fd3c"
+    },
+    "04_bootstrap_rmd17-disjoint_aspirin.jsonl": {
+      "records": 16,
+      "sha256": "d41c2539c5ca387690234b04fab2cd609370e51f9aae15eba9ecabbf2f5ab9d3"
+    },
+    "04_bootstrap_rmd17-disjoint_azobenzene.jsonl": {
+      "records": 16,
+      "sha256": "96992d7bf84f6ef58e7090334bdb976b5b9d26d79fd503e755ab078d05d774f7"
+    },
+    "04_bootstrap_rmd17-disjoint_ethanol.jsonl": {
+      "records": 16,
+      "sha256": "640f9f2af26a42aa6994ab20d79c7cb6d0c1ab4f7fcebd14862e833d392d0fd3"
+    },
+    "06_screening_disjoint_test_1200K.jsonl": {
+      "records": 210,
+      "sha256": "72333d023b6f158297eeb8b6d9d4bb29e9f50c64b52baf91fa9bcdcaea36547c"
+    },
+    "06_screening_rmd17-disjoint_aspirin.jsonl": {
+      "records": 210,
+      "sha256": "80ac8b11611bdcd76961211f44a9ba78e686f091407fae17752cc5861a830c43"
+    },
+    "06_screening_rmd17-disjoint_azobenzene.jsonl": {
+      "records": 210,
+      "sha256": "93e8f5adafe6f673cddf2f6f29922c2995763c397d96a1148e5f45ecf9662285"
+    },
+    "06_screening_rmd17-disjoint_ethanol.jsonl": {
+      "records": 210,
+      "sha256": "dbf9903a6bd816b07a26bcd77b2ee4927195027ca9c0575fa2c77268169c9f06"
+    },
+    "lane_scaling.jsonl": {
+      "records": 32,
+      "sha256": "0c6a704f5f97c9338d9c3ac3e22973cb1380d83f8cc442ee6f8583f77252eb4f"
+    },
+    "lane_scaling_disjoint.jsonl": {
+      "records": 32,
+      "sha256": "59344bc326b7ec1dae8d1f59b4005ffb50457b7696b79b55db663e0ca786663c"
+    },
+    "lane_scaling_rmd17-aspirin.jsonl": {
+      "records": 32,
+      "sha256": "8cdfc9e8613f7cf6afa2485c0f80894474f90b83a768d81c953c2deda1aa4a8f"
+    },
+    "lane_scaling_rmd17-azobenzene.jsonl": {
+      "records": 32,
+      "sha256": "6c9aa61e8871d1f19251cd006070cd12a0fd416d43eb1ced7cde61585f364cdb"
+    },
+    "lane_scaling_rmd17-ethanol.jsonl": {
+      "records": 32,
+      "sha256": "7219e21f3e457cc546ab737d4ce85a3a338f65a41f017112473b4d5d4abd699b"
+    }
+  },
+  "n_macros": 43,
+  "audit_problems": [
+    "working tree is dirty -- commit before freezing"
+  ]
+}
