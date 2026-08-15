@@ -36,6 +36,20 @@ VARIANTS = {
     "disjoint": "models/zenodo/3BPA/trainset_100/multihead-disjoint",
     "overlapping": "models/zenodo/3BPA/trainset_100/multihead-overlapping",
     "same": "models/zenodo/3BPA/trainset_100/multihead-same",
+    # The rMD17 committee is a single JOINT model trained on all ten molecules, so
+    # evaluating it on ethanol/aspirin/azobenzene gives spec SS32's molecule-size
+    # axis with no model confound.
+    "rmd17-disjoint": "models/zenodo/rMD17/full_trainset/multihead-disjoint",
+    "rmd17-overlapping": "models/zenodo/rMD17/full_trainset/multihead-overlapping",
+}
+
+DATA_PATHS = {
+    "test_1200K": "data/3bpa/test_1200K_ref.xyz",
+    "test_600K": "data/3bpa/test_600K_ref.xyz",
+    "test_300K": "data/3bpa/test_300K_ref.xyz",
+    "ethanol": "data/rmd17/ethanol_test_ref.xyz",
+    "aspirin": "data/rmd17/aspirin_test_ref.xyz",
+    "azobenzene": "data/rmd17/azobenzene_test_ref.xyz",
 }
 
 
@@ -69,7 +83,7 @@ def main() -> int:
     pin_numerics()
     ckpt = Path(VARIANTS[args.variant]) / "multihead_committee_stagetwo.model"
     adapter = MaceMHCAdapter.from_checkpoint(ckpt, dtype=torch.float64)
-    frames = load_frames(f"data/3bpa/{args.split}_ref.xyz", limit=args.n_frames)
+    frames = load_frames(DATA_PATHS[args.split], limit=args.n_frames)
     M, A = adapter.num_heads, len(frames[0])
     print(f"{args.variant} committee, M={M}, {len(frames)} structures x {A} atoms")
 
@@ -117,7 +131,7 @@ def main() -> int:
     sha, dirty = git_commit()
     summary = {
         "experiment_id": "01_exact_reproduction", "git_commit": sha, "git_dirty": dirty,
-        "dataset": "3bpa", "split": args.split, "variant": args.variant,
+        "dataset": "rmd17" if args.variant.startswith("rmd17") else "3bpa", "split": args.split, "variant": args.variant,
         "checkpoint_hash": checkpoint_hash(adapter.model), "precision": "float64",
         "num_heads": M, "num_atoms": A, "n_structures": len(frames),
         "S_global": {"median": float(scores["S_global"].median()),

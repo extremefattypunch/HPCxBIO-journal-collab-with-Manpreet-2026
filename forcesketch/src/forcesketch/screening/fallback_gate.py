@@ -54,6 +54,28 @@ def calibrate(
     return GateCalibration(c_alpha=c, alpha=alpha, tau=tau, eps=eps)
 
 
+@dataclass(frozen=True, slots=True)
+class LaneCostModel:
+    r"""Latency of an L-lane reverse pass, as T(L) = intercept + slope * L.
+
+    Lane COUNT is not lane COST: the forward pass and graph construction are paid
+    once regardless of L. Measured on the 3BPA committee (RTX 5070 Laptop, fp32,
+    CUDA events, 150 iters): T(1) = 21.4 ms and T(8) = 104.9 ms, giving
+    slope = 11.93 ms/lane and intercept = 9.50 ms. Using raw lane counts instead
+    would overstate the gate's speedup, because it would charge the shared forward
+    once per lane.
+    """
+
+    intercept_ms: float = 9.50
+    slope_ms_per_lane: float = 11.93
+
+    def __call__(self, lanes: int) -> float:
+        return self.intercept_ms + self.slope_ms_per_lane * lanes
+
+
+MEASURED_COST = LaneCostModel()
+
+
 def evaluate_gate(
     cal: GateCalibration,
     s_exact: Tensor,
@@ -61,13 +83,18 @@ def evaluate_gate(
     *,
     cost_sketch_lanes: int,
     cost_exact_lanes: int,
+    cost_model: LaneCostModel | None = None,
 ) -> dict:
     """Every spec SS34 metric on a held-out split.
 
-    `screening_speedup` uses lane counts as the cost model: the gate always pays
-    the sketch, and additionally pays the exact cost on the structures it does not
-    skip. That is the honest accounting -- a gate that skips nothing is SLOWER than
-    computing exact directly, and this formula shows it.
+    The gate always pays the sketch, and additionally pays the exact cost on the
+    structures it does not skip. That is the honest accounting -- a gate that skips
+    nothing is SLOWER than computing exact directly, and this formula shows it.
+
+    Two speedups are reported and must not be conflated (spec SS45):
+      * `screening_speedup_lanes` -- the idealized lane-count model.
+      * `screening_speedup`       -- the MEASURED T(L) model, which is the number
+                                     that reflects wall-clock and is the one to quote.
     """
     skip = cal.skip_mask(s_hat)
     high = s_exact >= cal.tau
@@ -77,10 +104,18 @@ def evaluate_gate(
     n = s_exact.numel()
     frac_skipped = float(skip.float().mean())
 
-    total_gate = cost_sketch_lanes * n + cost_exact_lanes * int((~skip).sum())
-    total_exact = cost_exact_lanes * n
+    n_exact_run = int((~skip).sum())
+    lane_gate = cost_sketch_lanes * n + cost_exact_lanes * n_exact_run
+    lane_exact = cost_exact_lanes * n
+
+    cm = cost_model or MEASURED_COST
+    ms_gate = cm(cost_sketch_lanes) * n + cm(cost_exact_lanes) * n_exact_run
+    ms_exact = cm(cost_exact_lanes) * n
 
     return {
+        "screening_speedup_lanes": float(lane_exact / max(lane_gate, 1)),
+        "screening_ms_gate": ms_gate,
+        "screening_ms_exact": ms_exact,
         "alpha": cal.alpha,
         "c_alpha": cal.c_alpha,
         "tau": cal.tau,
@@ -91,9 +126,9 @@ def evaluate_gate(
         "n_false_negatives": fn,
         "frac_exact_skipped": frac_skipped,
         "precision": float(tp / max(int((~skip).sum()), 1)),
-        "screening_lane_cost": total_gate,
-        "exact_lane_cost": total_exact,
-        "screening_speedup": float(total_exact / max(total_gate, 1)),
+        "screening_lane_cost": lane_gate,
+        "exact_lane_cost": lane_exact,
+        "screening_speedup": float(ms_exact / max(ms_gate, 1e-9)),
     }
 
 
