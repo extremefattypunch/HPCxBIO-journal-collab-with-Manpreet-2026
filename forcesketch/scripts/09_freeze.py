@@ -100,16 +100,30 @@ def main() -> int:
     Path("results/processed").mkdir(parents=True, exist_ok=True)
     Path("results/processed/table1_3bpa.md").write_text(table1_primary(SYSTEMS[0]))
     Path("results/processed/table3_screening.md").write_text(table3_screening(SYSTEMS))
+    from analysis.tables import table2_scaling
+    Path("results/processed/table2_scaling.md").write_text(table2_scaling())
     macros = emit_macros(Path("paper/macros.tex"))
 
-    from analysis.figures import pareto, screening_curve
+    from analysis.figures import k_tradeoff, method_schematic, pareto, screening_curve
+
+    TITLES = {
+        "disjoint_test_1200K": "3BPA@1200K, disjoint committee (M=8)",
+        "rmd17-disjoint_ethanol": "rMD17 ethanol (9 atoms), joint committee (M=8)",
+        "rmd17-disjoint_aspirin": "rMD17 aspirin (21 atoms), joint committee (M=8)",
+        "rmd17-disjoint_azobenzene": "rMD17 azobenzene (24 atoms), joint committee (M=8)",
+    }
+    method_schematic(Path("paper/figures/fig1_schematic.png"))
     for tag in SYSTEMS:
+        t = TITLES.get(tag, tag)
         if (RAW / f"03_sketch_fidelity_{tag}.jsonl").exists():
             pareto(RAW / f"03_sketch_fidelity_{tag}.jsonl",
-                   Path(f"paper/figures/fig2_pareto_{tag}.png"), title=tag)
+                   Path(f"paper/figures/fig2_pareto_{tag}.png"), title=t)
         if (RAW / f"06_screening_{tag}.jsonl").exists():
             screening_curve(RAW / f"06_screening_{tag}.jsonl",
-                            Path(f"paper/figures/fig5_screening_{tag}.png"), title=tag)
+                            Path(f"paper/figures/fig5_screening_{tag}.png"), title=t)
+    k_tradeoff(RAW / f"03_sketch_fidelity_{SYSTEMS[0]}.jsonl",
+               Path("paper/figures/fig3_k_tradeoff.png"),
+               title=TITLES[SYSTEMS[0]] + ", 10 seeds; error bars are seed sd")
 
     sha, dirty = git_commit()
     if dirty:
