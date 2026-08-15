@@ -37,7 +37,16 @@ from forcesketch.adapters.mace_data import load_frames, make_loader
 from forcesketch.adapters.mace_mhc import MaceMHCAdapter
 from forcesketch.utils.reproducibility import git_commit, pin_numerics
 
-CKPT = "models/zenodo/3BPA/trainset_100/multihead-disjoint/multihead_committee_stagetwo.model"
+VARIANTS = {
+    "disjoint": ("models/zenodo/3BPA/trainset_100/multihead-disjoint",
+                 "data/3bpa/test_1200K_ref.xyz"),
+    "rmd17-ethanol": ("models/zenodo/rMD17/full_trainset/multihead-disjoint",
+                      "data/rmd17/ethanol_test_ref.xyz"),
+    "rmd17-aspirin": ("models/zenodo/rMD17/full_trainset/multihead-disjoint",
+                      "data/rmd17/aspirin_test_ref.xyz"),
+    "rmd17-azobenzene": ("models/zenodo/rMD17/full_trainset/multihead-disjoint",
+                         "data/rmd17/azobenzene_test_ref.xyz"),
+}
 
 
 def timed(fn, iters: int, warmup: int) -> tuple[float, float, float]:
@@ -62,17 +71,20 @@ def main() -> int:
     ap.add_argument("--batch-sizes", type=int, nargs="+", default=[1, 4, 16, 64])
     ap.add_argument("--iters", type=int, default=200)
     ap.add_argument("--warmup", type=int, default=100)
-    ap.add_argument("--out", default="results/raw/lane_scaling.jsonl")
+    ap.add_argument("--variant", default="disjoint", choices=list(VARIANTS))
+    ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
     pin_numerics()
-    adapter = MaceMHCAdapter.from_checkpoint(CKPT, dtype=torch.float32)
+    ckpt_dir, data_path = VARIANTS[args.variant]
+    adapter = MaceMHCAdapter.from_checkpoint(
+        f"{ckpt_dir}/multihead_committee_stagetwo.model", dtype=torch.float32)
     M = adapter.num_heads
-    frames = load_frames("data/3bpa/test_1200K_ref.xyz", limit=max(args.batch_sizes))
+    frames = load_frames(data_path, limit=max(args.batch_sizes))
     sha, dirty = git_commit()
     records = []
 
-    print(f"3BPA committee, M={M}, {len(frames[0])} atoms/structure")
+    print(f"{args.variant}: M={M}, {len(frames[0])} atoms/structure")
     print(f"{args.iters} measured iters, {args.warmup} warmup, CUDA events, serial VJP\n")
     print(f"{'B':>3} {'atoms':>6} | " + "  ".join(f"L={L}" for L in range(1, M + 1)))
 
@@ -93,7 +105,7 @@ def main() -> int:
             row.append(f"{med:6.2f}")
             records.append({
                 "experiment_id": "lane_scaling", "git_commit": sha, "git_dirty": dirty,
-                "system": "3bpa", "method": "serial_vjp", "lanes": L, "batch_size": B,
+                "system": args.variant, "method": "serial_vjp", "lanes": L, "batch_size": B,
                 "num_atoms": n_atoms, "num_heads": M, "precision": "fp32",
                 "gpu": torch.cuda.get_device_name(0),
                 "median_ms": med, "iqr_ms": iqr,
@@ -106,11 +118,12 @@ def main() -> int:
                    "H4 min" if ceil3 < 2.0 else "H4 STRONG")
         print(f"{'':>10} | ceiling K=3: {ceil3:.2f}x   K=2: {ceil2:.2f}x   -> {verdict}")
 
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    with open(args.out, "w") as fh:
+    out = Path(args.out or f"results/raw/lane_scaling_{args.variant}.jsonl")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w") as fh:
         for r in records:
             fh.write(json.dumps(r) + "\n")
-    print(f"\nwrote {args.out} ({len(records)} records)")
+    print(f"\nwrote {out} ({len(records)} records)")
     return 0
 
 

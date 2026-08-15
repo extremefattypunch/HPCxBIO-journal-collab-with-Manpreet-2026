@@ -1,0 +1,248 @@
+% ForceSketch -- NeurIPS 2026 SIMBIOCHEM II workshop submission (non-archival, 5-8pp).
+% Swap \documentclass line for the workshop style file when it is available:
+%   \usepackage[final]{neurips_2026}
+% Every number is drawn from paper/macros.tex, which analysis/tables.py regenerates
+% from results/raw/. Do not write a literal result into this file (spec SS68).
+\documentclass[10pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,graphicx,microtype,url}
+\usepackage[round]{natbib}
+\usepackage[colorlinks,citecolor=blue,linkcolor=blue]{hyperref}
+\input{macros}
+
+\title{ForceSketch: Randomized Head-Space VJPs for Screening\\Force Uncertainty in Multi-Head Molecular Potentials}
+\author{Anonymous submission}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Multi-head committees make ensemble \emph{energy} uncertainty nearly free for machine-learned
+interatomic potentials: one forward pass through a shared trunk yields all $M$ head energies.
+Force uncertainty is not free. Because a single backward pass cannot produce the per-head forces,
+exact force disagreement requires resolving the full $(M{-}1)$-dimensional centered head subspace,
+i.e.\ $M{-}1$ reverse passes on top of the mean-force pass. We ask whether $K \ll M{-}1$ randomized
+or orthogonal head-space vector--Jacobian products can stand in. We derive unbiased Gaussian and
+Haar-orthogonal estimators with exact finite-$K$ standard-deviation corrections, and evaluate them
+against exact committee uncertainty on 3BPA and three rMD17 molecules with a pretrained eight-head
+MACE committee. Our answer is negative for \emph{replacement} and positive for \emph{screening}.
+At $K\!\le\!4$ no estimator recovers the exact top-5\% uncertainty set reliably (best
+\fsHaarRecallKFour{} for Haar at $K{=}4$), so sketching cannot substitute for exact force UQ. But a
+conservatively calibrated gate, built on a low-rank head-space control variate, skips
+\fsGateSkipThreeBPA{} of exact evaluations while retaining \fsGateRecallThreeBPA{} of
+high-uncertainty configurations on 3BPA, and generalizes to all three rMD17 molecules. Reducing
+reverse-mode directions is worth $\fsCeilingKThreeBOne\times$ in incremental UQ latency.
+\end{abstract}
+
+\section{Introduction}
+Uncertainty quantification is what makes learned interatomic potentials usable beyond their training
+distribution: it drives active learning, flags extrapolation during molecular dynamics, and decides
+when a reference calculation is required. Committee disagreement remains the most widely used
+estimator, and multi-head committees~\citep{beck2025mhc} make it dramatically cheaper by attaching
+$M$ readout heads to one shared message-passing trunk, so that all $M$ energies come from a single
+forward pass.
+
+That amortization does not extend to forces. As the multi-head committee work states directly,
+``a single backward pass can not yield the forces for all the heads, and thus their standard
+deviation \ldots\ the standard deviation requires multiple reverse passes through the computational
+graph.'' Forces are the quantity that matters for MD and for most acquisition rules, so the
+expensive half of committee UQ is exactly the half the shared trunk fails to amortize.
+
+Downstream, however, one rarely needs every member force. Acquisition needs a \emph{ranking};
+a safety gate needs a \emph{threshold decision}; error analysis needs the most uncertain
+\emph{atom}. This motivates estimating the force-variance statistic directly rather than
+reconstructing the member forces that define it. We call this ForceSketch: replace the exact
+$(M{-}1)$-direction centered head basis with $K$ randomized or orthogonal head-space directions,
+each costing one reverse pass.
+
+\paragraph{Contributions.}
+First, we formulate multi-head force disagreement as a statistic of the centered energy Jacobian
+with respect to atomic coordinates, and show the exact computation needs only the centered
+$(M{-}1)$-dimensional head subspace. Second, we give unbiased Gaussian, Haar-orthogonal,
+Rademacher and pairwise estimators, with closed-form finite-$K$ corrections for the componentwise
+force standard deviation; we correct a removable singularity in the Haar constant and verify every
+estimator by Monte Carlo. Third, we report a \emph{negative} result that we believe is the useful
+one: at $K\le4$ none of these estimators preserves the exact top-5\% acquisition set, on any of four
+molecular systems. Fourth, we show what does work --- a conservatively calibrated screening gate
+with a low-rank control variate --- and quantify both its decision quality and its wall-clock saving.
+
+\section{Problem formulation}
+For Cartesian coordinates $x\in\mathbb{R}^{D}$, $D=3N$, a multi-head committee defines energies
+$e(x)=[E_1(x),\dots,E_M(x)]^{\mathsf T}$ and head forces $f_m=-\nabla_x E_m$, collected as
+$F(x)\in\mathbb{R}^{D\times M}$. With the centering projector $P = I - \tfrac{1}{M}\mathbf{1}\mathbf{1}^{\mathsf T}$,
+the per-coordinate disagreement is
+\begin{equation}
+v_d \;=\; \frac{1}{M-1}\sum_{m}\bigl(F_{dm}-\bar F_d\bigr)^2 \;=\; \frac{1}{M-1}\bigl\|e_d^{\mathsf T}FP\bigr\|_2^2 ,
+\qquad S \;=\; \sum_d v_d \;=\; \frac{\|FP\|_F^2}{M-1},
+\end{equation}
+with atom-level scores $u_a^{\mathrm{RMS}}=\sqrt{\tfrac13\sum_\alpha v_{a\alpha}}$ and
+$u_a^{\mathrm{MHC}}=\tfrac13\sum_\alpha\sqrt{v_{a\alpha}}$.
+
+Let $Q\in\mathbb{R}^{M\times(M-1)}$ satisfy $Q^{\mathsf T}Q=I$, $Q^{\mathsf T}\mathbf 1=0$,
+$QQ^{\mathsf T}=P$. Each column gives one reverse pass, $g_j=-\nabla_x(q_j^{\mathsf T}e)=Fq_j$, and
+$v_d=\tfrac{1}{M-1}\sum_j g_{j,d}^2$. The mean force is one further seed, $s_0=\tfrac1M\mathbf 1$.
+Exact force UQ therefore costs $M$ reverse lanes in total. \emph{Our question is whether downstream
+uncertainty decisions require all $M-1$ centered directions.}
+
+\section{Method}
+\paragraph{Gaussian and Haar sketches.}
+Draw $z_k\sim\mathcal N(0,I_M)$ and center, $w_k=Pz_k$; one reverse pass gives $g_k=Fw_k$ and
+$\widehat v_d = \tfrac{1}{K(M-1)}\sum_k g_{k,d}^2$ is unbiased. Alternatively sample a Haar-random
+orthonormal $K$-frame $W=QO$ inside the centered space; then
+$\widehat v^{\mathrm{Haar}}_d = \tfrac1K\sum_k G_{dk}^2$ is unbiased and \emph{exact} at $K=M-1$.
+Writing $r=M-1$, the two have relative standard deviations $\sqrt{2/K}$ and
+$\sqrt{2(r-K)/(K(r+2))}$, so orthogonalization reduces estimator variance by exactly
+$(r-K)/(r+2)$ --- a factor of $4/9$ at $K{=}3$, $M{=}8$. This is free, and it is the single largest
+methodological lever we find.
+
+\paragraph{Finite-$K$ corrections.}
+$\sqrt{\widehat v_d}$ is biased low. For Gaussian probes $K\widehat v_d/v_d\sim\chi^2_K$ and the
+correction is $c_K=\sqrt{2/K}\,\Gamma(\tfrac{K+1}{2})/\Gamma(\tfrac K2)$. For Haar probes the
+analogous constant is conventionally written with Beta functions, which is singular at $K=r$
+(it evaluates $B(K/2,0)$). Cancelling the shared $\Gamma(\tfrac{r-K}{2})$ gives a form that is
+finite everywhere and exactly $1$ at full rank:
+\begin{equation}
+c^{\mathrm{Haar}}_{K,r}\;=\;\sqrt{\tfrac{r}{K}}\;
+\frac{\Gamma\!\left(\tfrac{K+1}{2}\right)\Gamma\!\left(\tfrac r2\right)}
+     {\Gamma\!\left(\tfrac K2\right)\Gamma\!\left(\tfrac{r+1}{2}\right)} ,
+\qquad c^{\mathrm{Haar}}_{K,r}\to c_K \ \text{ as } r\to\infty .
+\end{equation}
+We verify unbiasedness of $\sqrt{\widehat v}/c$ to within Monte-Carlo error at $4\times10^5$ draws.
+
+\paragraph{Low-rank control variate.}
+Split $P = Q_{r_0}Q_{r_0}^{\mathsf T} + R$, where $Q_{r_0}$ holds the $r_0$ leading eigenvectors of
+the calibration-set average $\bar A=\tfrac1n\sum_i PF_i^{\mathsf T}F_iP$. Evaluate those $r_0$
+directions exactly and sketch only the residual with $K'=K-r_0$ Haar directions:
+\begin{equation}
+\widehat v_d \;=\; \frac{1}{r}\Bigl[\textstyle\sum_{j\le r_0} g_{j,d}^2 \;+\; \frac{r-r_0}{K'}\sum_{k} G_{k,d}^2\Bigr],
+\end{equation}
+which remains unbiased. We stress the motivation is the \emph{opposite} of the intuitive one: a
+concentrated spectrum does not explain why small $K$ works, it is what \emph{breaks} a random sketch,
+because the sketch either captures the dominant directions or misses them.
+
+\paragraph{Screening rather than replacement.}
+Given a cheap $\widehat S$, calibrate $c_\alpha$ as the $(1-\alpha)$ quantile of
+$S(x_i)/\widehat S(x_i)$ on a held-out calibration split and define the optimistic bound
+$U(x)=c_\alpha\widehat S(x)$. For an exact high-uncertainty threshold $\tau$, skip the exact
+computation when $U(x)<\tau$ and fall back otherwise. The gate is conservative by construction:
+$U$ over-estimates $S$ for $(1-\alpha)$ of calibration structures.
+
+\section{Experimental setup}
+We use the pretrained eight-head MACE committees released with~\citep{beck2025mhc}: two message-passing
+layers, 32 channels, $\ell_{\max}=1$, $r_{\mathrm{cut}}=6$\,\AA. We evaluate the three
+head-distribution variants (\emph{disjoint}, \emph{overlapping}, \emph{same}) on 3BPA at 1200\,K
+(2139 structures, extrapolative relative to the 300\,K training set) and the joint ten-molecule
+rMD17 committee on ethanol (9 atoms), aspirin (21) and azobenzene (24), 1000 held-out structures each.
+All estimator evaluation is in float64. This is not fastidiousness: with mean force over disagreement
+$\rho\approx36$ on this committee, an float32 ``exact'' reference carries $\sim\!3\times10^{-5}$
+relative error, larger than the $10^{-5}$ tolerance at which we verify full-rank exactness.
+Ten random seeds are frozen before testing and none is discarded. Timing uses CUDA events with
+per-iteration measurement on an RTX 5070 Laptop GPU; the measured lane cost is
+$T(L)=\fsCostIntercept + \fsCostSlope\,L$\,ms.
+
+\section{Results}
+
+\subsection{Can force disagreement be sketched?}
+Table~\ref{tab:primary} and Figure~\ref{fig:pareto} give the answer: partially, and not well enough
+to replace exact computation. Haar is the best sketch at every budget --- top-5\% recall
+\fsHaarRecallKTwo, \fsHaarRecallKThree{} and \fsHaarRecallKFour{} at $K=2,3,4$ --- and beats Gaussian
+by the margin the variance ratio predicts (\fsGaussRecallKThree{} at $K{=}3$). Rank correlation is
+respectable (Spearman \fsHaarSpearmanKFour{} at $K{=}4$), but tail selection is not: no method
+approaches the 0.90 recall that would justify substitution.
+
+The head-space spectrum rules out the obvious explanation. Its stable rank is \fsStableRank{} of a
+maximum 7 (leading direction \fsTopEigFraction{} of the energy), i.e.\ close to isotropic --- the
+regime that \emph{favours} random sketching. The limit is simply estimator variance at small $K$.
+
+\subsection{Does sketching beat using fewer heads?}
+It depends on whether an exact mean force is required, and we report both framings. At equal total
+reverse lanes \emph{with} an exact mean force, Haar at $K{=}3$ (\fsHaarRecallKThree) beats head
+subsampling at $K{=}3$ plus a mean lane (\fsHeadSubRecallKThree). Head subsampling at $K{=}4$ with no
+mean lane scores higher still, but cannot produce the mean force that molecular dynamics requires.
+Reporting only one framing would settle this comparison by definition rather than by measurement.
+
+\subsection{Does reducing directions reduce GPU time?}
+Yes, and uniformly. The measured ceiling on incremental UQ speedup, $T(L{=}8)/T(L{=}K{+}1)$, is
+$\fsCeilingKThreeBOne\times$ at $K{=}3$ and $\fsCeilingKTwoBOne\times$ at $K{=}2$, and is flat across
+batch sizes $B\in\{1,4,16,64\}$ ($\fsCeilingKThreeBSixtyFour\times$ at $B{=}64$). Real MACE is
+compute-bound even at $B{=}1$, so the launch-bound regime in which extra cotangent lanes ride along
+free never occurs. We report an important caveat in Section~\ref{sec:limitations}: our exact baseline
+is a serial loop, because batched reverse-mode is unusable on this software stack.
+
+\subsection{Can approximate screening avoid exact computation?}
+This is where the method succeeds. With a control variate at $r_0{=}2$, $K{=}4$ and $\alpha{=}0.05$,
+evaluated on held-out test splits with $c_\alpha$ and $\tau$ fitted only on calibration data:
+
+\begin{center}\small
+\begin{tabular}{lrrrr}
+\toprule
+system & high-UQ recall & exact skipped & screening speedup \\
+\midrule
+3BPA @ 1200\,K   & \fsGateRecallThreeBPA   & \fsGateSkipThreeBPA   & $\fsGateSpeedupThreeBPA\times$ \\
+rMD17 ethanol    & \fsGateRecallEthanol    & \fsGateSkipEthanol    & $\fsGateSpeedupEthanol\times$ \\
+rMD17 aspirin    & \fsGateRecallAspirin    & \fsGateSkipAspirin    & $\fsGateSpeedupAspirin\times$ \\
+rMD17 azobenzene & \fsGateRecallAzobenzene & \fsGateSkipAzobenzene & $\fsGateSpeedupAzobenzene\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Roughly four in five exact force-UQ evaluations are avoided while $97\%$--$99\%$ of
+high-uncertainty configurations are still routed to the exact computation. The wall-clock saving is
+modest because the gate pays the sketch on every structure; the decision-quality saving is the
+substantive result.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.49\textwidth]{figures/fig2_pareto_disjoint_test_1200K.png}
+\includegraphics[width=0.49\textwidth]{figures/fig5_screening_disjoint_test_1200K.png}
+\caption{Left: accuracy--latency Pareto on 3BPA@1200\,K; no method reaches the 0.90 recall line
+before the exact budget. Right: the screening gate --- fraction of exact evaluations skipped against
+retained high-uncertainty recall.}
+\label{fig:pareto}
+\end{figure}
+
+\section{Limitations}
+\label{sec:limitations}
+\textbf{The exact baseline is serial.} \texttt{torch.autograd.grad(is\_grads\_batched=True)} is not
+usable with MACE on e3nn 0.4.4: it succeeds once or twice per process and then fails inside the
+TorchScript interpreter, because the optimized autograd nodes reject vmap's batched tensors. The
+behaviour survives a fresh model instance, disabling e3nn's codegen options, disabling the profiling
+executor, and rebuilding the model unscripted; \texttt{torch.func.vjp} is separately blocked because
+MACE calls \texttt{requires\_grad\_()} inside \texttt{forward}. On a stack where batched reverse-mode
+works, the exact baseline would be faster and our speedups correspondingly smaller. We regard
+reporting this as more useful than quietly comparing against a Python loop.
+\textbf{Other limitations:} the estimator is approximate for $K<M-1$ and, on these systems, not
+accurate enough to replace exact UQ; extreme-value statistics (most-uncertain atom) converge more
+slowly than global ones; committee disagreement is only a proxy for error; calibration may shift
+out of distribution; $M{=}8$ bounds the maximum possible saving; rMD17 spans only 9--24 atoms, so
+molecule size is a weak axis; and cuEquivariance is unavailable for this readout, so all baselines
+are e3nn-only.
+
+\section{Conclusion}
+Exact multi-head force uncertainty cannot be replaced by a handful of randomized head-space VJPs at
+the fidelity that acquisition requires --- we could not reach 0.90 top-5\% recall below
+$K\approx6$ of 7 on any of four systems. It can, however, be \emph{screened}: a conservatively
+calibrated gate over a control-variate sketch avoids roughly four in five exact force-UQ
+computations while retaining nearly all high-uncertainty structures. For active-learning loops, where
+the cost is dominated by exact evaluations on structures that turn out to be unremarkable, that is
+the operation that matters.
+
+\bibliographystyle{plainnat}
+\begin{thebibliography}{9}
+\bibitem[Beck et al.(2025)]{beck2025mhc} H.~Beck, P.~Simko, L.~L.~Schaaf, O.~Marsalek, and C.~Schran.
+Multi-head committees enable direct uncertainty prediction for atomistic foundation models.
+\emph{J. Chem. Phys.} 163, 234103 (2025). arXiv:2508.09907.
+\bibitem[Batatia et al.(2022)]{mace} I.~Batatia, D.~P.~Kov\'acs, G.~N.~C.~Simm, C.~Ortner, and G.~Cs\'anyi.
+MACE: Higher order equivariant message passing neural networks for fast and accurate force fields.
+\emph{NeurIPS} (2022).
+\bibitem[Kov\'acs et al.(2021)]{botnet} D.~P.~Kov\'acs et al. Linear atomic cluster expansion force fields
+for organic molecules. \emph{J. Chem. Theory Comput.} 17, 7696 (2021). [3BPA dataset]
+\bibitem[Christensen \& von Lilienfeld(2020)]{rmd17} A.~S.~Christensen and O.~A.~von Lilienfeld.
+On the role of gradients for machine learning of molecular energies and forces.
+\emph{Mach. Learn.: Sci. Technol.} 1, 045018 (2020). [rMD17]
+\bibitem[Hutchinson(1990)]{hutchinson} M.~F.~Hutchinson. A stochastic estimator of the trace of the
+influence matrix for Laplacian smoothing splines. \emph{Commun. Stat. Simul. Comput.} 19, 433 (1990).
+\end{thebibliography}
+
+\end{document}

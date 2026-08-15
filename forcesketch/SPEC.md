@@ -281,6 +281,7 @@ define the \(M\) model energies
 \[
 e(x)
 =
+
 \begin{bmatrix}
 E_1(x)\\
 E_2(x)\\
@@ -298,6 +299,7 @@ For head \(m\),
 \[
 f_m(x)
 =
+
 -\nabla_xE_m(x).
 \]
 
@@ -306,6 +308,7 @@ Collect the head forces:
 \[
 F(x)
 =
+
 \begin{bmatrix}
 f_1(x) &
 f_2(x) &
@@ -325,8 +328,10 @@ Define
 \[
 P
 =
+
 I
 -
+
 \frac{1}{M}
 \mathbf{1}\mathbf{1}^{\mathsf T}.
 \]
@@ -356,6 +361,7 @@ For Cartesian coordinate \(d\),
 \[
 v_d
 =
+
 \frac{1}{M-1}
 \sum_{m=1}^{M}
 \left(
@@ -368,6 +374,7 @@ Equivalently,
 \[
 v_d
 =
+
 \frac{1}{M-1}
 \left\|
 e_d^{\mathsf T}FP
@@ -381,8 +388,10 @@ e_d^{\mathsf T}FP
 \[
 S
 =
+
 \sum_{d=1}^{D}v_d
 =
+
 \frac{1}{M-1}
 \|FP\|_F^2.
 \]
@@ -396,6 +405,7 @@ For atom \(a\),
 \[
 S_a
 =
+
 \sum_{\alpha=1}^{3}
 v_{a\alpha}.
 \]
@@ -407,6 +417,7 @@ v_{a\alpha}.
 \[
 u_a^{\mathrm{RMS}}
 =
+
 \sqrt{
 \frac{1}{3}
 \sum_{\alpha=1}^{3}
@@ -421,6 +432,7 @@ v_{a\alpha}
 \[
 u_a^{\mathrm{MHC}}
 =
+
 \frac{1}{3}
 \sum_{\alpha=1}^{3}
 \sqrt{v_{a\alpha}}.
@@ -463,11 +475,13 @@ For column \(q_j\),
 \[
 g_j
 =
+
 -\nabla_x
 \left(
 q_j^{\mathsf T}e(x)
 \right)
 =
+
 Fq_j.
 \]
 
@@ -476,6 +490,7 @@ Then
 \[
 v_d
 =
+
 \frac{1}{M-1}
 \sum_{j=1}^{M-1}
 g_{j,d}^2.
@@ -506,6 +521,7 @@ Define mean-energy seed
 \[
 s_0
 =
+
 \frac{1}{M}\mathbf{1}.
 \]
 
@@ -517,6 +533,7 @@ Then
 s_0^{\mathsf T}e(x)
 \right)
 =
+
 \bar f.
 \]
 
@@ -553,6 +570,7 @@ Construct scalar objective
 \[
 L_k(x)
 =
+
 w_k^{\mathsf T}e(x).
 \]
 
@@ -561,8 +579,10 @@ One VJP gives
 \[
 g_k
 =
+
 -\nabla_xL_k
 =
+
 Fw_k.
 \]
 
@@ -571,6 +591,7 @@ Estimate coordinate variance:
 \[
 \widehat v_d
 =
+
 \frac{1}{K(M-1)}
 \sum_{k=1}^{K}
 g_{k,d}^2.
@@ -584,6 +605,7 @@ Then
 \widehat v_d
 \right]
 =
+
 v_d.
 \]
 
@@ -592,6 +614,7 @@ Global estimator:
 \[
 \widehat S
 =
+
 \sum_d
 \widehat v_d.
 \]
@@ -621,6 +644,7 @@ Define
 \[
 c_K
 =
+
 \sqrt{\frac{2}{K}}
 \frac{
 \Gamma\left(
@@ -638,6 +662,7 @@ Use
 \[
 \widehat\sigma_d
 =
+
 \frac{
 \sqrt{\widehat v_d}
 }{
@@ -650,6 +675,7 @@ Then construct
 \[
 \widehat u_a^{\mathrm{MHC}}
 =
+
 \frac{1}{3}
 \sum_{\alpha=1}^{3}
 \widehat\sigma_{a\alpha}.
@@ -698,6 +724,7 @@ Then
 \[
 \widehat v_d^{\mathrm{Haar}}
 =
+
 \frac{1}{K}
 \sum_{k=1}^{K}
 G_{dk}^2.
@@ -711,6 +738,7 @@ Because a random \(K\)-dimensional subspace captures \(K/r\) of squared norm in 
 \widehat v_d^{\mathrm{Haar}}
 \right]
 =
+
 v_d.
 \]
 
@@ -733,6 +761,7 @@ For \(K<r\), define
 \[
 c_{K,r}^{\mathrm{Haar}}
 =
+
 \sqrt{\frac{r}{K}}
 \frac{
 B\left(
@@ -758,6 +787,7 @@ Then estimate
 \[
 \widehat\sigma_d^{\mathrm{Haar}}
 =
+
 \frac{
 \sqrt{
 \widehat v_d^{\mathrm{Haar}}
@@ -791,6 +821,7 @@ The identity
 \sum_{i<j}
 \|f_i-f_j\|^2
 =
+
 M
 \sum_i
 \|f_i-\bar f\|^2
@@ -805,6 +836,7 @@ implies, for a uniformly sampled unordered pair,
 \|f_i-f_j\|^2
 \right]
 =
+
 S.
 \]
 
@@ -817,6 +849,7 @@ Coordinatewise,
 (f_{i,d}-f_{j,d})^2
 \right]
 =
+
 v_d.
 \]
 
@@ -853,6 +886,7 @@ For ForceSketch:
 \[
 S_{\mathrm{sketch}}
 =
+
 \begin{bmatrix}
 s_0^{\mathsf T}\\
 w_1^{\mathsf T}\\
@@ -866,6 +900,7 @@ For exact computation:
 \[
 S_{\mathrm{exact}}
 =
+
 \begin{bmatrix}
 s_0^{\mathsf T}\\
 q_1^{\mathsf T}\\
@@ -1030,6 +1065,7 @@ Use
 \[
 E_m(x)
 =
+
 a_m^{\mathsf T}x+b_m.
 \]
 
@@ -1189,6 +1225,7 @@ Break latency into:
 \[
 T_{\mathrm{total}}
 =
+
 T_{\mathrm{forward}}
 +
 T_{\mathrm{mean}}
@@ -1418,6 +1455,7 @@ On calibration structures calculate
 \[
 r_i
 =
+
 \frac{
 S(x_i)
 }{
@@ -1436,6 +1474,7 @@ Define
 \[
 U(x)
 =
+
 c_\alpha
 \widehat S(x).
 \]
@@ -1549,6 +1588,7 @@ On a calibration set compute
 \[
 A_i
 =
+
 PF_i^{\mathsf T}F_iP.
 \]
 
@@ -1557,6 +1597,7 @@ Average:
 \[
 \bar A
 =
+
 \frac{1}{n}
 \sum_iA_i.
 \]
@@ -1600,6 +1641,7 @@ Sketch only the residual:
 \[
 R
 =
+
 P-Q_{r_0}Q_{r_0}^{\mathsf T}.
 \]
 
@@ -2960,3 +3002,4 @@ K\text{ sketch directions}
 \]
 
 That is the paper.
+
