@@ -188,8 +188,11 @@ def main() -> int:
         perm = torch.randperm(S, generator=g)
         n1, n2 = int(0.2 * S), int(0.4 * S)
         design, calib, test = perm[:n1], perm[n1:n2], perm[n2:]
-        assert len(set(design.tolist()) & set(calib.tolist())) == 0
-        assert len(set(calib.tolist()) & set(test.tolist())) == 0
+        # All three pairwise, not just the adjacent two: the point of the split is
+        # that c_alpha is never fitted on structures used to fit Q_{r0} OR to test.
+        ds, cs, ts = map(lambda t: set(t.tolist()), (design, calib, test))
+        assert not (ds & cs) and not (cs & ts) and not (ds & ts), "splits overlap"
+        assert len(ds) + len(cs) + len(ts) == len(perm), "splits do not partition"
         tau = float(torch.quantile(u_ex[design], 1.0 - args.target_p))
         Q = leading_head_directions(F[design], args.r0)          # design split ONLY
 
