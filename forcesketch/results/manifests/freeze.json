@@ -1,6 +1,6 @@
 {
   "frozen": false,
-  "git_commit": "c4a847d5cba0ff59bd0feb6333342210f67f52db",
+  "git_commit": "66b49e8f339edca32d81d3aaaaaa9109791b6c76",
   "git_dirty": true,
   "n_bootstrap_resamples": 10000,
   "seeds": {
@@ -173,6 +173,10 @@
       "records": 64,
       "sha256": "1497cdb03d72d0e51a409df7aad805e0082216e0d6c86f5524f61add2e254fad"
     },
+    "02e_compile_batched.jsonl": {
+      "records": 2,
+      "sha256": "3368a62859ddd5e2bbbb50b8af36b916bcf5a5556ba345452f11b4f960b83ec8"
+    },
     "03_sketch_fidelity_disjoint_test_1200K.jsonl": {
       "records": 380,
       "sha256": "377135e43fba2a35e43905e3a9501a4eaec2bd6de62e631a4f86fe7e90bfa922"
@@ -223,19 +227,19 @@
     },
     "06_screening_disjoint_test_1200K.jsonl": {
       "records": 210,
-      "sha256": "72333d023b6f158297eeb8b6d9d4bb29e9f50c64b52baf91fa9bcdcaea36547c"
+      "sha256": "50a9b357417be03e3dab1bc9d29c666b3a54b2503176c3d570d9cbc51aab056a"
     },
     "06_screening_rmd17-disjoint_aspirin.jsonl": {
       "records": 210,
-      "sha256": "80ac8b11611bdcd76961211f44a9ba78e686f091407fae17752cc5861a830c43"
+      "sha256": "4b0610e9fdf342af54bb2b538e0dd87e493e3e19fa7824abfec13207db26a3fa"
     },
     "06_screening_rmd17-disjoint_azobenzene.jsonl": {
       "records": 210,
-      "sha256": "93e8f5adafe6f673cddf2f6f29922c2995763c397d96a1148e5f45ecf9662285"
+      "sha256": "db141c284a08de316eb5d4cd4c7776192de111e82aee2b6fd422e7c28e532d4f"
     },
     "06_screening_rmd17-disjoint_ethanol.jsonl": {
       "records": 210,
-      "sha256": "dbf9903a6bd816b07a26bcd77b2ee4927195027ca9c0575fa2c77268169c9f06"
+      "sha256": "984a6d2bd2f91502a76762e254fe07c15da343085e1f0f5d224af3fa632631eb"
     },
     "07_gate_baselines_global.jsonl": {
       "records": 16,
