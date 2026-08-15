@@ -150,7 +150,8 @@ def emit_macros(out: Path) -> dict:
     put("fsCostSlope", b, "{:.2f}")
 
     # LaTeX control sequences must be letters only -- no digits in macro names.
-    WORD = {1: "One", 2: "Two", 3: "Three", 4: "Four", 7: "Seven", 64: "SixtyFour"}
+    WORD = {1: "One", 2: "Two", 3: "Three", 4: "Four", 7: "Seven",
+            16: "Sixteen", 64: "SixtyFour"}
 
     fid = load_jsonl(RAW / "03_sketch_fidelity_disjoint_test_1200K.jsonl")
     g = mean_by(fid, ("method", "K"), ("top5_recall", "spearman"))
@@ -229,6 +230,22 @@ def emit_macros(out: Path) -> dict:
                 continue
             put(nm, rec["delta_top5_recall"])
             put(nm + "CI", f"[{rec['ci_lo']:.3f}, {rec['ci_hi']:.3f}]")
+
+    # --- batched vs serial exact baseline (spec SS17 items 3-4) ------------
+    bv = RAW / "02d_batched_vs_serial.jsonl"
+    if bv.exists():
+        d = {(r["batch_size"], r["lanes"], r["impl"]): r["median_ms"]
+             for r in load_jsonl(bv)}
+        SKIP = 0.860   # control variate r0=2, K=4, alpha=0.05, 3BPA
+        for B in (1, 16):
+            best = {L: min(d[(B, L, "serial")], d[(B, L, "batched")]) for L in (1, 4, 5, 8)}
+            put(f"fsBestTotalKThreeB{WORD[B]}", best[8] / best[4], "{:.2f}")
+            put(f"fsBestIncrKThreeB{WORD[B]}",
+                (best[8] - best[1]) / (best[4] - best[1]), "{:.2f}")
+            gate = best[5] + (1 - SKIP) * best[8]
+            put(f"fsBestGateSpeedupB{WORD[B]}", best[8] / gate, "{:.2f}")
+        put("fsBatchedFlatLaneOne", d[(1, 1, "batched")], "{:.1f}")
+        put("fsBatchedFlatLaneEight", d[(1, 8, "batched")], "{:.1f}")
 
     sp = PROC / "spectrum_disjoint_test_1200K.json"
     if sp.exists():

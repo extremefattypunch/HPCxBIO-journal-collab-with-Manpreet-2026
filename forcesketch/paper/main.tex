@@ -32,9 +32,11 @@ At $K\!\le\!4$ no estimator recovers the exact top-5\% uncertainty set reliably 
 for exact force UQ. But a
 conservatively calibrated gate, built on a low-rank head-space control variate, skips
 \fsGateSkipThreeBPA{} of exact evaluations while retaining \fsGateRecallThreeBPA{} of
-high-uncertainty configurations on 3BPA, and generalizes to all three rMD17 molecules. Reducing
-reverse-mode directions is worth $\fsIncrKThreeBOne\times$ in incremental UQ latency and
-$\fsTotalKThreeBOne\times$ in total force-plus-UQ latency.
+high-uncertainty configurations on 3BPA, and generalizes to all three rMD17 molecules. The
+wall-clock benefit, however, is strongly regime-dependent: measured against a batched exact
+baseline, reducing reverse directions is worth only $\fsBestTotalKThreeBOne\times$ at batch size 1
+but $\fsBestTotalKThreeBSixteen\times$ at batch size 16, because batched reverse mode amortizes
+cotangent lanes almost completely at small batch.
 \end{abstract}
 
 \section{Introduction}
@@ -201,32 +203,56 @@ but it cannot produce the mean force molecular dynamics requires. Reporting a si
 have settled this comparison by definition rather than by measurement.
 
 \subsection{Does reducing directions reduce GPU time?}
-Yes, and remarkably uniformly. We report the two speedups separately because they answer different
-questions. The \emph{incremental UQ} speedup is
-$[T(L{=}M)-T(L{=}1)]\,/\,[T(L{=}1{+}K)-T(L{=}1)]$, i.e.\ the cost of uncertainty alone once the
-mean force is paid for; it is $\fsIncrKThreeBOne\times$ at $K{=}3$ and $\fsIncrKTwoBOne\times$ at
-$K{=}2$. The \emph{total workflow} speedup $T(L{=}M)/T(L{=}1{+}K)$ includes the mean-force lane and
-is necessarily smaller: $\fsTotalKThreeBOne\times$ and $\fsTotalKTwoBOne\times$.
+Only in some regimes, and the honest answer required first making the strongest baseline available.
 
-Sweeping $B\in\{1,4,16,64\}$ and three molecules spanning 9 to 27 atoms, the incremental figure
-stays within $1.82$--$2.51\times$ at $K{=}3$ and $3.11$--$4.03\times$ at $K{=}2$, and the total
-within $1.77$--$1.87\times$ and $2.17$--$2.39\times$. What the saving tracks is therefore
-\emph{the reverse-lane count} --- not the atom count and not the batch size. Real MACE is
-compute-bound even at $B{=}1$ (one lane costs $\sim\!21$\,ms for 27 atoms), so the launch-bound
-regime in which extra cotangent lanes would ride along free never occurs on this hardware.
-A kernel-level profile at $B{=}16$ confirms the mechanism. The shared forward is only $9.4$\,ms of
-a $100.6$\,ms exact step, so the reverse pass dominates by roughly an order of magnitude. More
-tellingly, the \emph{composition} of GPU time is invariant in the lane count: elementwise and
-activation kernels take $42.2\%$ of device time at $L{=}7$ and $41.5$--$41.9\%$ at $L{=}2,3,4$;
-e3nn tensor products $21.3\%$ versus $20.0$--$20.9\%$; GEMMs $16.2\%$ versus $16.3$--$16.4\%$; and
-the same $134$ distinct kernels appear in every configuration. What changes is only how many times
-they run --- $10{,}161$ launches per exact step against $4{,}796$ at $K{=}3$. Sketching therefore
-saves time in the most straightforward way available: it \emph{linearly reduces repeated execution
-of the shared trunk}, with no kernel disproportionately dominating at high lane count and no fixed
-cost being amortized away. Fitting device time gives $\approx\!10.8$\,ms per lane against the
-$\fsCostSlope$\,ms per lane measured in wall-clock, the gap being launch gaps not counted as kernel
-time. We report an important caveat in Section~\ref{sec:limitations}: our exact baseline
-is a serial loop, because batched reverse-mode is unusable on this software stack.
+\paragraph{Batched reverse mode, and why it initially appeared impossible.}
+\texttt{torch.autograd.grad(is\_grads\_batched=True)} vectorizes the backward over cotangents while
+reusing one forward graph, and is the baseline spec-level fairness demands. On this stack it fails
+with \texttt{Cannot access data pointer of Tensor that doesn't have storage} --- but only from the
+third call onwards, which disguises the cause. The mechanism is: batched reverse mode runs under
+\texttt{torch.\_vmap\_internals}, so cotangents are \texttt{BatchedTensor}s with no storage;
+TorchScript's profiling executor emits an optimized plan only after two warm-ups; and the TensorExpr
+fuser then fuses the \emph{reverse} graph into a \texttt{prim::TensorExprGroup}, whose kernel
+requires a raw \texttt{data\_ptr()} for every input. The TorchScript on the path is
+\texttt{e3nn}'s \texttt{\_spherical\_harmonics}, a module-level \texttt{@torch.jit.script}
+\emph{free function} --- not a module, so walking the module tree finds nothing to un-script, and a
+fully rebuilt zero-\texttt{ScriptModule} model still fails. Disabling the TensorExpr fuser before
+the first forward fixes it: 50/50 consecutive batched calls agreeing with the serial path to
+$3\times10^{-15}$, at a $\sim\!4\%$ cost to the serial path from losing fusion. We report this
+because it is a trap any e3nn-based UQ work will hit, and because without it we would have compared
+against a Python loop, which spec-level fairness forbids.
+
+\paragraph{With that baseline, the benefit is regime-dependent.}
+Batched reverse mode is dramatically better at small batch: at $B{=}1$ it takes
+$\fsBatchedFlatLaneOne$\,ms for one lane and $\fsBatchedFlatLaneEight$\,ms for eight --- nearly
+\emph{flat} in the lane count, so additional cotangents are almost free. ForceSketch's total
+force-plus-UQ speedup at $K{=}3$ therefore collapses to $\fsBestTotalKThreeBOne\times$ at $B{=}1$,
+against $1.83\times$ if one compares only to a serial loop. At $B{=}16$ the batched path scales with
+$L$ again and the speedup recovers to $\fsBestTotalKThreeBSixteen\times$; at $B{=}64$ the batched
+path exhausts the 8\,GB card and the serial loop wins, giving $1.86\times$. Incremental UQ speedups
+are $\fsBestIncrKThreeBOne\times$ and $\fsBestIncrKThreeBSixteen\times$ at $B{=}1$ and $B{=}16$,
+but that statistic is unstable at small batch precisely because $T(L{=}1{+}K)\approx T(L{=}1)$ there.
+
+\begin{center}\small
+\begin{tabular}{lrrrr}
+\toprule
+ & \multicolumn{2}{c}{$B=1$ (27 atoms)} & \multicolumn{2}{c}{$B=16$ (432 atoms)} \\
+lanes $L$ & serial & batched & serial & batched \\
+\midrule
+1 & 22.9 & 25.5 & 24.3 & 26.0 \\
+4 & 60.3 & \textbf{27.5} & 62.5 & \textbf{39.7} \\
+8 & 110.5 & \textbf{30.5} & 115.6 & \textbf{73.2} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+A kernel-level profile of the serial path explains why removing lanes helps at all when it does: the
+composition of GPU time is invariant in $L$ (elementwise $42.2\%$ at $L{=}7$ against
+$41.5$--$41.9\%$ at $L{=}2,3,4$; tensor products $21.3\%$ against $20.0$--$20.9\%$; the same $134$
+distinct kernels throughout), and only the repetition count changes --- $10{,}161$ launches per exact
+step against $4{,}796$ at $K{=}3$. Sketching linearly reduces repeated execution of the shared
+trunk. Batched reverse mode attacks the same redundancy by a different route, which is exactly why
+the two are substitutive at small batch.
 
 \paragraph{A stronger exact baseline.}
 Spec-level fairness demands the exact baseline be as fast as we can make it. Compiling the model
@@ -261,9 +287,17 @@ rMD17 azobenzene & \fsGateRecallAzobenzene & \fsGateSkipAzobenzene & $\fsGateSpe
 \end{center}
 
 Roughly four in five exact force-UQ evaluations are avoided while $97\%$--$99\%$ of
-high-uncertainty configurations are still routed to the exact computation. The wall-clock saving is
-modest because the gate pays the sketch on every structure; the decision-quality saving is the
-substantive result.
+high-uncertainty configurations are still routed to the exact computation. These are properties of
+the estimator and are unaffected by the choice of exact implementation.
+
+The wall-clock saving is a different matter, and inherits the regime dependence of Section~5.3. The
+gate pays $K{+}1$ lanes on \emph{every} structure and $M$ lanes on the minority it cannot clear, so
+it only pays off when lanes are expensive. Against the strongest exact baseline it is
+$\fsBestGateSpeedupBSixteen\times$ at $B{=}16$ and $1.26\times$ at $B{=}64$, but
+$\fsBestGateSpeedupBOne\times$ at $B{=}1$ --- a net \emph{slowdown}, because batched reverse mode
+makes eight lanes nearly as cheap as five. The gate is therefore worth running for batched
+active-learning sweeps and not for single-structure MD steps, and we would rather say so than quote
+the serial-baseline figure of $1.23\times$.
 
 \begin{figure}[t]
 \centering

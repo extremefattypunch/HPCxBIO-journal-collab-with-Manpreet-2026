@@ -16,7 +16,7 @@ recall requirement fails, and it fails by a wide margin rather than marginally.
 
 | §52 requirement | status | evidence |
 |---|---|---|
-| strongest exact batched baseline complete | **partial** | `is_grads_batched` and `torch.func` unusable on MACE+e3nn 0.4.4 (documented in `tests/test_real_model.py::test_batched_vjp_limitation_is_characterized`). `torch.compile` works only with eager fallback and gives 1.04–1.10×; measured against it the speedups erode by 2–6%. Serial remains the primary baseline. |
+| strongest exact batched baseline complete | **now complete** | `is_grads_batched` RESOLVED — disable the TensorExpr fuser before the first forward (50/50 calls, 3e-15 vs serial). It is the strongest baseline at B≤16. `torch.compile` gives 1.04–1.10×. `torch.func` remains unavailable. |
 | mathematical tests passing | **pass** | 41/41, incl. §20, §21, §22, §23, §24 |
 | one complete accuracy–latency Pareto curve | **pass** | `paper/figures/fig2_pareto_*.png` |
 | top-5% recall ≥ 0.90 for at least one useful K | **FAIL** | best is 0.743 (control variate r0=2, K=4, 3BPA); 0.52–0.56 on rMD17 |
@@ -74,18 +74,22 @@ scores 0.588. Both framings are in `results/raw/03_sketch_fidelity_*.jsonl`; the
 distinction matters because MD needs the exact mean force.
 
 **Q4 — incremental UQ speedup vs exact?** §45 defines this as
-[T(L=8)−T(L=1)]/[T(L=1+K)−T(L=1)], i.e. uncertainty cost once the mean force is paid:
-**2.19–2.51× at K=3** and **3.11–4.03× at K=2**, across four systems and
-B ∈ {1,4,16,64}. Measured against the serial exact baseline.
+[T(L=8)−T(L=1)]/[T(L=1+K)−T(L=1)]. Against the **strongest available** baseline
+(batched where it wins): **1.63× at B=1** and **3.18× at B=16**. Against a
+serial-only baseline it was 2.19–2.51×. Note the statistic is unstable at small
+batch because batching makes T(L=1+K) ≈ T(L=1) there.
 
-**Q5 — total mean-force + UQ speedup?** T(L=8)/T(L=1+K), which includes the
-mean-force lane and is necessarily smaller: **1.77–1.87× at K=3** and
-**2.17–2.39× at K=2**. An earlier draft of this document quoted the total figure
-under the incremental label; §45 forbids conflating them and they are now separate.
+**Q5 — total mean-force + UQ speedup?** T(L=8)/T(L=1+K). Against the strongest
+baseline: **1.11× at B=1**, **1.85× at B=16**, **1.86× at B=64**. Against
+serial-only it was a uniform 1.77–1.87×. **This is the headline correction of the
+project**: the apparent batch-independence was an artifact of comparing to a serial
+loop.
 
-**Q6 — where does the benefit disappear?** It does not, over B = 1…64 — the ratio is
-flat because real MACE is compute-bound even at B=1 (21 ms for a single lane). It
-*would* shrink on a stack where batched VJP works; see the caveat below.
+**Q6 — where does the benefit disappear?** **At B=1 and B=4.** Batched reverse mode
+is nearly flat in lane count at small batch (25.5 ms at L=1 vs 30.5 ms at L=8), so
+extra cotangents are almost free and ForceSketch buys 1.11×. The benefit returns at
+B=16 (1.85×) and B=64 (1.86×, where batched exhausts the 8 GB card and serial wins).
+Single-structure MD is the regime where this method does not pay for itself here.
 
 **Q7 — exact evaluations the gate can skip?** 76.5–86.0% at α = 0.05.
 
@@ -103,16 +107,18 @@ reporting that.
 
 ## Caveats that must survive into any write-up
 
-1. **The exact baseline is serial, not batched.** `torch.autograd.grad(...,
-   is_grads_batched=True)` is unusable on MACE + e3nn 0.4.4: it succeeds once or
-   twice in a fresh process, then raises `Cannot access data pointer of Tensor that
-   doesn't have storage` from the TorchScript interpreter. The specialization is
-   cumulative and survives a fresh model instance, disabling
-   `jit_script_fx`/`optimize_einsums`/`specialized_code`, disabling the profiling
-   executor, and rebuilding the model unscripted. `torch.func.vjp`+`vmap` is
-   separately blocked because MACE calls `requires_grad_()` inside forward. **On a
-   stack where batched VJP works, the exact baseline would be faster and every
-   speedup here correspondingly smaller.**
+1. **RESOLVED — batched reverse mode now works, and it changed the conclusion.**
+   Root cause: `is_grads_batched` runs under `torch._vmap_internals`, so cotangents
+   are BatchedTensors with no storage; TorchScript's profiling executor emits an
+   optimized plan after two warm-ups, and the TensorExpr fuser fuses the *reverse*
+   graph into a `prim::TensorExprGroup` whose kernel needs a raw `data_ptr()`. The
+   TorchScript on the path is e3nn's `_spherical_harmonics`, a module-level
+   `@torch.jit.script` **free function** — not a module, which is why walking the
+   module tree finds nothing and why a fully rebuilt 0-ScriptModule model still
+   fails. Fix: disable the TensorExpr fuser **before the first forward** (it is dead
+   afterwards — the plan is cached per graph). Verified 50/50 calls at 3e-15 vs
+   serial, costing ~4% on the serial path from lost fusion.
+   **Consequence: the speedups above are the corrected, regime-dependent ones.**
 
 2. **cuEquivariance is unavailable** with the PR #800 readout, so all baselines are
    e3nn-only.

@@ -23,29 +23,38 @@ from forcesketch.adapters.base import BaseMHCAdapter
 
 
 def configure_e3nn_for_batched_vjp() -> None:
-    """Disable e3nn's TorchScript codegen. MUST run before any model is built or
-    loaded, which is why it is called at import time of this module.
+    """Make `torch.autograd.grad(..., is_grads_batched=True)` usable with MACE.
 
-    e3nn 0.4.4 defaults to jit_script_fx=True, compiling every tensor product with
-    torch.jit.script. A scripted backward cannot accept vmap's BatchedTensor, so
-    `torch.autograd.grad(..., is_grads_batched=True)` dies with
+    MUST run before the first forward pass of any e3nn/MACE model in the process:
+    TorchScript caches an optimized plan per graph, and once one exists these flags
+    have no effect. That is why this is called at import time of this module.
 
-        RuntimeError: The following operation failed in the TorchScript interpreter.
-        RuntimeError: Cannot access data pointer of Tensor that doesn't have storage
+    Root cause. `is_grads_batched=True` runs the backward under
+    `torch._vmap_internals._vmap`, so cotangents are BatchedTensors with no storage.
+    Independently, e3nn's `_spherical_harmonics` is a module-level
+    `@torch.jit.script` FREE FUNCTION -- not a Module, which is why counting
+    `torch.jit.ScriptModule` instances reports zero and is misleading -- sitting
+    directly on the positions -> energy path. TorchScript's profiling executor emits
+    an optimized plan only after two warm-up executions; that plan wraps the body in
+    a `prim::DifferentiableGraph`, and the TensorExpr (NNC) fuser then fuses the
+    REVERSE graph into a `prim::TensorExprGroup`. `TensorExprKernel` requires a raw
+    `data_ptr()` for every input, which a BatchedTensor cannot provide. Hence the
+    characteristic pattern: calls 0 and 1 succeed, call 2 raises
+    "Cannot access data pointer of Tensor that doesn't have storage".
 
-    That is not a vmap *fallback* (spec SS18's warning case) -- it is a hard error,
-    and it would remove the batched exact baseline that spec SS17 requires and that
-    the whole SS50 systems question is measured against. Setting the flag before the
-    checkpoint is unpickled fixes it: e3nn's CodeGenMixin.__setstate__ regenerates
-    the forward at load time and honours the current default.
+    Disabling the fuser is therefore the fix, and it works on the pickled checkpoint
+    as shipped -- verified 20/20 consecutive batched calls matching the serial path
+    to 1.8e-15. Note `torch._C._jit_set_profiling_executor(False)` makes it WORSE,
+    because the legacy executor builds the fused graph on call 1 instead of call 2.
 
-    Verified on the real 3BPA committee: batched and serial VJPs both return
-    [L, N_total, 3] and agree to float64 tolerance.
-
-    (torch.func.vjp + vmap remains unavailable for a separate reason -- MACE calls
-    Tensor.requires_grad_() inside forward, which functorch forbids -- so spec
-    SS17 item 4 is reported as not applicable rather than silently skipped.)
+    `e3nn.set_optimization_defaults(jit_script_fx=False)` is kept because it is
+    harmless and reduces codegen, but it is NOT what fixes this: e3nn's
+    `CodeGenMixin.__setstate__` unconditionally calls `torch.jit.load`, so a pickled
+    checkpoint always restores 18 RecursiveScriptModules regardless of the flag.
     """
+    torch._C._jit_set_texpr_fuser_enabled(False)
+    torch._C._jit_override_can_fuse_on_gpu(False)
+    torch._C._jit_override_can_fuse_on_cpu(False)
     e3nn.set_optimization_defaults(jit_script_fx=False)
 
 
