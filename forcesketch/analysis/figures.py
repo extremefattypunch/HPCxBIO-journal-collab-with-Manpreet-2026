@@ -258,3 +258,66 @@ def k_tradeoff(fidelity_jsonl: Path, out: Path, *, title: str,
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=160)
     plt.close(fig)
+
+
+def gate_pareto(gate_jsonl: Path, out: Path, *, title: str) -> None:
+    """Skip fraction vs high-UQ recall for every gate, all systems (revision C4).
+
+    This is the figure the paper's positive claim actually rests on, so it plots
+    the comparison rather than ForceSketch alone: a calibrated gate is a generic
+    wrapper, and the claim only stands if this gate beats the cheaper gates a
+    reader would reach for at matched reverse-lane budget.
+
+    Up-and-right is better in both axes, so Pareto dominance is visible directly
+    rather than inferred from a table. Error bars are the 95% paired bootstrap
+    intervals, which matter here: a top-5% positive set holds only ~50-110
+    structures, so recall is the noisier of the two axes by some margin.
+    """
+    recs = load_jsonl(gate_jsonl)
+    STYLE = {
+        "energy (free)":       ("tab:gray",   "o", "energy disagreement (0 lanes, free)"),
+        "head-exact-mean K=4": ("tab:orange", "s", "head subsampling + exact mean (5)"),
+        "haar K=4":            ("tab:blue",   "^", "Haar sketch (5)"),
+        "control-variate K=4": ("tab:red",    "*", "control variate (5)"),
+    }
+    SYSMARK = {"3bpa": 0, "ethanol": 1, "aspirin": 2, "azobenzene": 3}
+
+    fig, ax = plt.subplots(figsize=(6.4, 4.4))
+    for gate, (colour, marker, label) in STYLE.items():
+        rs = [r for r in recs if r["gate"] == gate]
+        if not rs:
+            continue
+        x = [r["frac_exact_skipped"] for r in rs]
+        y = [r["high_uq_recall"] for r in rs]
+        xerr = np.abs(np.array([[r["frac_exact_skipped"] - r["skip_ci_lo"] for r in rs],
+                                [r["skip_ci_hi"] - r["frac_exact_skipped"] for r in rs]]))
+        yerr = np.abs(np.array([[r["high_uq_recall"] - r["recall_ci_lo"] for r in rs],
+                                [r["recall_ci_hi"] - r["high_uq_recall"] for r in rs]]))
+        ax.errorbar(x, y, xerr=xerr, yerr=yerr, fmt="none", ecolor=colour,
+                    alpha=0.35, elinewidth=1, capsize=2, zorder=1)
+        ax.scatter(x, y, c=colour, marker=marker,
+                   s=180 if marker == "*" else 55, label=label,
+                   edgecolors="black", linewidths=0.5, zorder=3)
+        if gate == "control-variate K=4":
+            # The control-variate points cluster tightly (that IS the result), so
+            # the labels must be staggered or they overprint one another.
+            OFFSETS = {"3bpa": (8, 8), "ethanol": (-46, 8),
+                       "aspirin": (8, -14), "azobenzene": (-58, -14)}
+            for r in rs:
+                ax.annotate(r["system"], (r["frac_exact_skipped"], r["high_uq_recall"]),
+                            textcoords="offset points",
+                            xytext=OFFSETS.get(r["system"], (6, -10)),
+                            fontsize=7, color="0.25")
+
+    ax.axhline(0.95, ls=":", c="0.5", lw=1)
+    ax.text(0.02, 0.951, "0.95 recall", fontsize=7, color="0.4")
+    ax.set_xlabel("fraction of exact force-UQ evaluations skipped  (higher is better)")
+    ax.set_ylabel("high-UQ recall  (higher is better)")
+    ax.set_title(title, fontsize=10)
+    ax.set_xlim(0, 1)
+    ax.grid(alpha=0.25)
+    ax.legend(fontsize=7.5, loc="lower left", framealpha=0.95)
+    fig.tight_layout()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=160)
+    plt.close(fig)

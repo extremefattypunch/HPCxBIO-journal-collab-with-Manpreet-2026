@@ -439,11 +439,17 @@ probing it obliviously.
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=0.49\textwidth]{figures/fig2_pareto_disjoint_test_1200K.png}
-\includegraphics[width=0.49\textwidth]{figures/fig5_screening_disjoint_test_1200K.png}
-\caption{Left: accuracy--latency Pareto on 3BPA@1200\,K; no method reaches the 0.90 recall line
-before the exact budget. Right: the screening gate --- fraction of exact evaluations skipped against
-retained high-uncertainty recall.}
+\includegraphics[width=0.47\textwidth]{figures/fig2_pareto_disjoint_test_1200K.png}
+\hfill
+\includegraphics[width=0.51\textwidth]{figures/fig5_gate_pareto.png}
+\caption{Left: accuracy--latency Pareto for the sketch itself on 3BPA@1200\,K, ranked by the global
+statistic; no method reaches the $0.90$ recall line before the exact budget --- the negative result.
+Right: the screening decision, under the primary max-component rule, for all four gates at matched
+reverse-lane budget on all four systems. Up-and-right is better on both axes, so Pareto dominance is
+read directly. The control variate (red) sits above and to the right of every other gate on every
+system but one: on ethanol the free energy gate reaches recall $1.000$ while skipping barely a third
+of evaluations. Bars are $95\%$ paired bootstrap intervals; recall is the noisier axis because a
+top-5\% positive set holds only tens of structures.}
 \label{fig:pareto}
 \end{figure}
 

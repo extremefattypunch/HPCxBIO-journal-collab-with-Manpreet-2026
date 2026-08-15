@@ -145,7 +145,13 @@ def main() -> int:
     Path("results/processed/table2_scaling.md").write_text(table2_scaling())
     macros = emit_macros(Path("paper/macros.tex"))
 
-    from analysis.figures import k_tradeoff, method_schematic, pareto, screening_curve
+    from analysis.figures import (
+        gate_pareto,
+        k_tradeoff,
+        method_schematic,
+        pareto,
+        screening_curve,
+    )
 
     TITLES = {
         "disjoint_test_1200K": "3BPA@1200K, disjoint committee (M=8)",
@@ -162,6 +168,10 @@ def main() -> int:
         if (RAW / f"06_screening_{tag}.jsonl").exists():
             screening_curve(RAW / f"06_screening_{tag}.jsonl",
                             Path(f"paper/figures/fig5_screening_{tag}.png"), title=t)
+    gb = RAW / "07_gate_baselines_maxcomp.jsonl"
+    if gb.exists():
+        gate_pareto(gb, Path("paper/figures/fig5_gate_pareto.png"),
+                    title="Screening gates at matched budget, max-component rule, 4 systems")
     k_tradeoff(RAW / f"03_sketch_fidelity_{SYSTEMS[0]}.jsonl",
                Path("paper/figures/fig3_k_tradeoff.png"),
                title=TITLES[SYSTEMS[0]] + ", 10 seeds; error bars are seed sd")
