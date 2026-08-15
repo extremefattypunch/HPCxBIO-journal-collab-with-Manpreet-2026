@@ -1,6 +1,6 @@
 {
   "frozen": true,
-  "git_commit": "38a1a109971f5d2183c43743a673bd87f2c9ade8",
+  "git_commit": "c628dd5d1df8aae238d8a6c80335cbdcad88e80f",
   "git_dirty": false,
   "n_bootstrap_resamples": 10000,
   "seeds": {
@@ -251,7 +251,7 @@
     },
     "07_gate_baselines_maxcomp.jsonl": {
       "records": 16,
-      "sha256": "d45a3f2b94d9f90d7a05065a5cd80bf79cd424464307679e08e470a195ea2fd1"
+      "sha256": "612001b8b61b77703fa0634f93c710d1c9e766c9f0d88934f759734bc8d0fd8b"
     },
     "08_profile.jsonl": {
       "records": 4,
