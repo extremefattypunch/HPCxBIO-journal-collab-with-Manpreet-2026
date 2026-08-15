@@ -16,7 +16,7 @@ recall requirement fails, and it fails by a wide margin rather than marginally.
 
 | §52 requirement | status | evidence |
 |---|---|---|
-| strongest exact batched baseline complete | **partial** | `is_grads_batched` unusable on MACE+e3nn 0.4.4; serial loop is the strongest *available* baseline, documented in `tests/test_real_model.py::test_batched_vjp_limitation_is_characterized` |
+| strongest exact batched baseline complete | **partial** | `is_grads_batched` and `torch.func` unusable on MACE+e3nn 0.4.4 (documented in `tests/test_real_model.py::test_batched_vjp_limitation_is_characterized`). `torch.compile` works only with eager fallback and gives 1.04–1.10×; measured against it the speedups erode by 2–6%. Serial remains the primary baseline. |
 | mathematical tests passing | **pass** | 41/41, incl. §20, §21, §22, §23, §24 |
 | one complete accuracy–latency Pareto curve | **pass** | `paper/figures/fig2_pareto_*.png` |
 | top-5% recall ≥ 0.90 for at least one useful K | **FAIL** | best is 0.743 (control variate r0=2, K=4, 3BPA); 0.52–0.56 on rMD17 |
@@ -125,9 +125,10 @@ reporting that.
 4. **Timing is single-GPU, single-run.** §44's full protocol (≥500 iterations,
    counterbalanced ordering, subprocess isolation) is implemented for the lane scan
    only; medians and IQRs are recorded throughout. §46's phase profiling is done
-   (Q9 above); §26's six-implementation comparison is moot for the batched and
-   `torch.func` variants and unmeasured for the compiled-forward one; §31's batch
-   sweep is covered by the lane scan at B in {1,4,16,64}.
+   (Q9 above); of §26's six implementations the batched and `torch.func` variants are
+   unavailable on this stack, and the compiled-forward variant is now measured
+   (1.04–1.10×, eroding ForceSketch speedups by 2–6%); §31's batch sweep is covered
+   by the lane scan at B in {1,4,16,64}.
 
 6. **Nsight Systems is not usable on this stack; kernel attribution came from
    `torch.profiler` instead.** Two independent obstacles: (a) e3nn ships 18 compiled

@@ -205,6 +205,21 @@ $\fsCostSlope$\,ms per lane measured in wall-clock, the gap being launch gaps no
 time. We report an important caveat in Section~\ref{sec:limitations}: our exact baseline
 is a serial loop, because batched reverse-mode is unusable on this software stack.
 
+\paragraph{A stronger exact baseline.}
+Spec-level fairness demands the exact baseline be as fast as we can make it. Compiling the model
+with \texttt{torch.compile} is possible only partially --- Dynamo builds a sequence-length guard on
+e3nn's \texttt{Irrep} type and calls \texttt{len()} on it, which e3nn raises
+\texttt{NotImplementedError} for by design, so regions must be allowed to fall back to eager. With
+that, compilation is correct to $2.2\times10^{-7}$ and gives $1.04$--$1.10\times$, larger at higher
+lane counts. The scaling is the informative part: the \emph{absolute} saving grows linearly with
+$L$ ($\sim\!1.2$\,ms per lane), so this is not merely a faster forward --- AOTAutograd is producing
+a cheaper backward as well. Fitting both, eager costs $9.80+11.77L$\,ms and compiled
+$11.54+10.31L$\,ms: compilation adds fixed cost and removes $12\%$ of the marginal cost of a lane.
+Because ForceSketch's saving comes precisely from removing lanes, the two are partly substitutive;
+measured against the compiled baseline the total speedups erode by only $2$--$6\%$
+($2.05\times \to 1.97\times$ at $K{=}3$). We report the eager baseline as primary, since it needs
+no fallback workaround, and note this margin.
+
 \subsection{Can approximate screening avoid exact computation?}
 This is where the method succeeds. With a control variate at $r_0{=}2$, $K{=}4$ and $\alpha{=}0.05$,
 evaluated on held-out test splits with $c_\alpha$ and $\tau$ fitted only on calibration data:
