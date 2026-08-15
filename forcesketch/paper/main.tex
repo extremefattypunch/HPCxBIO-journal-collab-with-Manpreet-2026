@@ -11,7 +11,14 @@
 \input{macros}
 
 \title{ForceSketch: Randomized Head-Space VJPs for Screening\\Force Uncertainty in Multi-Head Molecular Potentials}
-\author{Anonymous submission}
+% If SIMBIOCHEM II turns out to be double-blind, swap the two lines below.
+% \author{Anonymous submission}
+\author{%
+  Ian Poon\\
+  Department of Cellular and Molecular Biology\\
+  Harvard University\\
+  \texttt{ian\_poon@fas.harvard.edu}%
+}
 \date{}
 
 \begin{document}
@@ -19,24 +26,21 @@
 
 \begin{abstract}
 Multi-head committees make ensemble \emph{energy} uncertainty nearly free for machine-learned
-interatomic potentials: one forward pass through a shared trunk yields all $M$ head energies.
-Force uncertainty is not free. Because a single backward pass cannot produce the per-head forces,
-exact force disagreement requires resolving the full $(M{-}1)$-dimensional centered head subspace,
-i.e.\ $M{-}1$ reverse passes on top of the mean-force pass. We ask whether $K \ll M{-}1$ randomized
-or orthogonal head-space vector--Jacobian products can stand in. We derive unbiased Gaussian and
-Haar-orthogonal estimators with exact finite-$K$ standard-deviation corrections, and evaluate them
-against exact committee uncertainty on 3BPA and three rMD17 molecules with a pretrained eight-head
-MACE committee. Our answer is negative for \emph{replacement} and positive for \emph{screening}.
-At $K\!\le\!4$ no estimator recovers the exact top-5\% uncertainty set reliably (best
-\fsHaarRecallKFour{} \fsHaarRecallKFourCI{} for Haar at $K{=}4$), so sketching cannot substitute
-for exact force UQ. But a
-conservatively calibrated gate, built on a low-rank head-space control variate, skips
+interatomic potentials: one forward pass yields all $M$ head energies. Force uncertainty is not,
+since a single backward pass cannot produce the per-head forces --- exact disagreement needs the
+full $(M{-}1)$-dimensional centered head subspace. We ask whether $K\ll M{-}1$ randomized or
+orthogonal head-space vector--Jacobian products can stand in, using unbiased Gaussian and Haar
+estimators with exact finite-$K$ corrections, on a pretrained eight-head MACE committee across 3BPA
+and three rMD17 molecules. The answer is negative for \emph{replacement} and positive for
+\emph{screening}. At $K\le4$ no estimator recovers the exact top-5\% uncertainty set (best
+\fsHaarRecallKFour{} \fsHaarRecallKFourCI{}). But a conservatively calibrated gate over a low-rank
+head-space control variate skips
 \fsGateSkipThreeBPA{} of exact evaluations while retaining \fsGateRecallThreeBPA{} of
-high-uncertainty configurations on 3BPA, and generalizes to all three rMD17 molecules. The
-wall-clock benefit, however, is strongly regime-dependent: measured against a batched exact
-baseline, reducing reverse directions is worth only $\fsBestTotalKThreeBOne\times$ at batch size 1
-but $\fsBestTotalKThreeBSixteen\times$ at batch size 16, because batched reverse mode amortizes
-cotangent lanes almost completely at small batch.
+high-uncertainty configurations, on all four systems. The wall-clock benefit is sharply
+regime-dependent: against a \emph{batched} exact baseline, reducing directions is worth
+$\fsBestTotalKThreeBSixteen\times$ at batch size 16 but only $\fsBestTotalKThreeBOne\times$ at batch
+size 1, where batched reverse mode already amortizes cotangent lanes and the gate becomes a net
+slowdown. The decision-quality result is robust; the speed result is not.
 \end{abstract}
 
 \section{Introduction}
@@ -328,12 +332,24 @@ are e3nn-only.
 
 \section{Conclusion}
 Exact multi-head force uncertainty cannot be replaced by a handful of randomized head-space VJPs at
-the fidelity that acquisition requires --- we could not reach 0.90 top-5\% recall below
-$K\approx6$ of 7 on any of four systems. It can, however, be \emph{screened}: a conservatively
-calibrated gate over a control-variate sketch avoids roughly four in five exact force-UQ
-computations while retaining nearly all high-uncertainty structures. For active-learning loops, where
-the cost is dominated by exact evaluations on structures that turn out to be unremarkable, that is
-the operation that matters.
+the fidelity acquisition requires: we could not reach 0.90 top-5\% recall below $K\approx6$ of $7$
+on any of four systems, and a concentrated head-space spectrum is not the reason --- the spectrum is
+close to isotropic, so the limit is simply estimator variance at small $K$.
+
+It can, however, be \emph{screened}. A conservatively calibrated gate over a control-variate sketch
+avoids roughly four in five exact force-UQ computations while retaining $97$--$99\%$ of
+high-uncertainty structures, on every system tested. That decision-quality result is a property of
+the estimator and holds regardless of implementation.
+
+Whether it saves time is a separate question, and the honest answer is: only in batch. Once batched
+reverse mode is enabled --- which on this stack required disabling the TensorExpr fuser, since e3nn's
+scripted spherical harmonics otherwise fuse the reverse graph into a kernel that cannot accept
+batched cotangents --- extra cotangent lanes become nearly free at $B{=}1$, and both the sketch and
+the gate stop paying for themselves. The method is therefore worth deploying for batched
+active-learning sweeps over candidate structures, and not for single-structure MD steps. We think
+the more useful contribution is the measurement that separates those two regimes, together with the
+observation that orthogonalizing the probes is free and worth more than any other single choice in
+the estimator design.
 
 \bibliographystyle{plainnat}
 \begin{thebibliography}{9}
