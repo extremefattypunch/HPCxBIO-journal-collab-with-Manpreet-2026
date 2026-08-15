@@ -119,12 +119,28 @@ def head_space_spectrum(F: torch.Tensor) -> dict:
     eig = eig[: M - 1].clamp_min(0)               # drop the null direction
     frac = (eig / eig.sum()).tolist()
     cum = np.cumsum(frac).tolist()
+
+    # Two distinct quantities that a previous version conflated -- it returned the
+    # SAME formula under both names, and reported it as "stable rank". They differ
+    # by ~1.7x here, so both are given with their definitions and the ambiguous
+    # bare name is not used anywhere.
+    #
+    #   stable rank of FQ (the matrix we actually sketch):
+    #       ||FQ||_F^2 / ||FQ||_2^2 = tr(A) / lambda_max
+    #   effective / participation rank:
+    #       tr(A)^2 / tr(A^2)
+    stable_rank_FQ = float(eig.sum() / eig[0])
+    stable_rank_A = float((eig**2).sum() / eig[0] ** 2)
+    effective_rank = float(eig.sum() ** 2 / (eig**2).sum())
+
     return {
         "eigenvalues": eig.tolist(),
         "fraction": frac,
         "cumulative": cum,
-        "stable_rank": float(eig.sum() ** 2 / (eig**2).sum()),
-        "participation_ratio": float(1.0 / sum(f**2 for f in frac)),
+        "stable_rank_FQ": stable_rank_FQ,
+        "stable_rank_A": stable_rank_A,
+        "effective_rank": effective_rank,
+        "isotropic_top1_fraction": 1.0 / (M - 1),
         "top1_fraction": frac[0],
         "n_for_90pct": int(np.searchsorted(cum, 0.90) + 1),
     }

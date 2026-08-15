@@ -54,22 +54,33 @@ DATA_PATHS = {
 
 
 def build_cache(adapter: MaceMHCAdapter, frames: list, *, batch_size: int) -> dict:
-    """-> {'F': [n_struct, A, 3, M] float64 head forces, 'f_ref': same shape minus M}."""
+    """-> {'F': [S, A, 3, M] head forces, 'E': [S, M] head energies, 'f_ref': [S, A, 3]}.
+
+    Head ENERGIES are cached alongside the forces because they are the input to the
+    free energy-disagreement screening baseline: all M come from the single forward
+    pass the model already runs, so that gate costs zero reverse lanes. Without it
+    the paper cannot answer the obvious reviewer question -- does a calibrated gate
+    on the free signal do just as well?
+    """
     A = len(frames[0])
     assert all(len(f) == A for f in frames), "3BPA is fixed-size; cache assumes it"
     M = adapter.num_heads
     out = torch.empty(len(frames), A, 3, M, dtype=torch.float64)
+    out_E = torch.empty(len(frames), M, dtype=torch.float64)
 
     done = 0
     for batch in make_loader(frames, adapter.model, batch_size=batch_size):
         b = adapter.prepare(batch.to_dict())
+        E = adapter.energies(b).detach().double()          # [B, M]
         F = adapter.exact_head_forces(b).double()          # [M, N, 3]
         n_struct = F.shape[1] // A
         F = F.view(M, n_struct, A, 3).permute(1, 2, 3, 0)  # [n_struct, A, 3, M]
         out[done:done + n_struct] = F.cpu()
+        out_E[done:done + n_struct] = E.cpu()
         done += n_struct
     assert done == len(frames)
-    return {"F": out, "f_ref": reference_forces(frames).view(len(frames), A, 3).double()}
+    return {"F": out, "E": out_E,
+            "f_ref": reference_forces(frames).view(len(frames), A, 3).double()}
 
 
 def main() -> int:
@@ -123,7 +134,8 @@ def main() -> int:
     outdir = Path("results/processed")
     outdir.mkdir(parents=True, exist_ok=True)
     tag = f"{args.variant}_{args.split}"
-    torch.save({"F": F, "f_ref": cache["f_ref"], "frames": len(frames), "M": M, "A": A,
+    torch.save({"F": F, "E": cache["E"], "f_ref": cache["f_ref"],
+                "frames": len(frames), "M": M, "A": A,
                 "variant": args.variant, "split": args.split,
                 "checkpoint_hash": checkpoint_hash(adapter.model)},
                outdir / f"head_forces_{tag}.pt")

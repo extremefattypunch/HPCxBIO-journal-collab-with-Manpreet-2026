@@ -11,14 +11,10 @@
 \input{macros}
 
 \title{ForceSketch: Randomized Head-Space VJPs for Screening\\Force Uncertainty in Multi-Head Molecular Potentials}
-% If SIMBIOCHEM II turns out to be double-blind, swap the two lines below.
-% \author{Anonymous submission}
-\author{%
-  Ian Poon\\
-  Department of Cellular and Molecular Biology\\
-  Harvard University\\
-  \texttt{ian\_poon@fas.harvard.edu}%
-}
+% SIMBIOCHEM II is DOUBLE-BLIND: non-anonymized submissions are desk-rejected.
+% Do not restore an author block before checking the venue's policy.
+\author{Anonymous submission}
+\hypersetup{pdfauthor={},pdftitle={},pdfsubject={},pdfkeywords={}}
 \date{}
 
 \begin{document}
@@ -81,7 +77,7 @@ with a low-rank control variate --- and quantify both its decision quality and i
 \caption{What ForceSketch replaces. All $M$ head energies come from one forward pass through the
 shared trunk, but forces do not: each head-space direction costs its own reverse pass, so exact
 force disagreement needs $M$ lanes. ForceSketch spends $K{+}1$, and --- since the approximation is
-not accurate enough to \emph{replace} exact uncertainty at $K\le4$ (Section~5.1) --- its score
+not accurate enough to \emph{replace} exact uncertainty at $K\le4$ (Section~\ref{sec:fidelity}) --- its score
 feeds a conservatively calibrated gate that runs the exact path only where the bound cannot rule
 out the high-uncertainty threshold.}
 \label{fig:schematic}
@@ -155,7 +151,7 @@ head-distribution variants (\emph{disjoint}, \emph{overlapping}, \emph{same}) on
 (2139 structures, extrapolative relative to the 300\,K training set) and the joint ten-molecule
 rMD17 committee on ethanol (9 atoms), aspirin (21) and azobenzene (24), 1000 held-out structures each.
 All estimator evaluation is in float64. This is not fastidiousness: with mean force over disagreement
-$\rho\approx36$ on this committee, an float32 ``exact'' reference carries $\sim\!3\times10^{-5}$
+$\rho\approx36$ on this committee, a float32 ``exact'' reference carries $\sim\!3\times10^{-5}$
 relative error, larger than the $10^{-5}$ tolerance at which we verify full-rank exactness.
 Ten random seeds are frozen before testing and none is discarded; all confidence
 intervals are paired bootstraps over structures with \fsNBoot{} resamples. Timing uses CUDA events with
@@ -165,6 +161,7 @@ $T(L)=\fsCostIntercept + \fsCostSlope\,L$\,ms.
 \section{Results}
 
 \subsection{Can force disagreement be sketched?}
+\label{sec:fidelity}
 Figure~\ref{fig:pareto} gives the answer: partially, and not well enough to replace exact
 computation. Haar is the best sketch at every budget --- top-5\% recall \fsHaarRecallKTwo,
 \fsHaarRecallKThree{} \fsHaarRecallKThreeCI{} and \fsHaarRecallKFour{} \fsHaarRecallKFourCI{} at
@@ -180,9 +177,15 @@ $\fsDeltaOrtho$ \fsDeltaOrthoCI{} in top-5\% recall, and is significant on all f
 low-rank control variate adds a further $\fsDeltaCV$ \fsDeltaCVCI{} over Haar at $K{=}4$, reaching
 \fsCVRecallKFour{} \fsCVRecallKFourCI{} --- still short of 0.90.
 
-The head-space spectrum rules out the obvious explanation. Its stable rank is \fsStableRank{} of a
-maximum 7 (leading direction \fsTopEigFraction{} of the energy), i.e.\ close to isotropic --- the
-regime that \emph{favours} random sketching. The limit is simply estimator variance at small $K$.
+The head-space spectrum explains why. Writing $A=\bar{Q^{\mathsf T}F^{\mathsf T}FQ}$ for the averaged
+centered force-disagreement Gram matrix, the stable rank of the matrix we actually sketch is
+$\operatorname{srank}(FQ)=\|FQ\|_F^2/\|FQ\|_2^2=\operatorname{tr}(A)/\lambda_{\max}
+=\fsSrankLo$--$\fsSrankHi$ of a maximum $7$ across the four systems, with the leading direction
+carrying $\fsTopEigLo$--$\fsTopEigHi$ of the disagreement (an isotropic spectrum would give
+$\fsTopEigIsotropic$). The spectrum is therefore \emph{moderately diffuse rather than strongly
+rank-concentrated} --- but far from isotropic, at roughly $2.3\times$ the isotropic leading share.
+That is exactly the regime in which a random $K$-dimensional projection pays a variance penalty, and
+it is why projecting out the leading directions (the control variate) recovers so much.
 
 \begin{figure}[t]
 \centering
@@ -207,6 +210,7 @@ but it cannot produce the mean force molecular dynamics requires. Reporting a si
 have settled this comparison by definition rather than by measurement.
 
 \subsection{Does reducing directions reduce GPU time?}
+\label{sec:regime}
 Only in some regimes, and the honest answer required first making the strongest baseline available.
 
 \paragraph{Batched reverse mode, and why it initially appeared impossible.}
@@ -225,6 +229,19 @@ the first forward fixes it: 50/50 consecutive batched calls agreeing with the se
 $3\times10^{-15}$, at a $\sim\!4\%$ cost to the serial path from losing fusion. We report this
 because it is a trap any e3nn-based UQ work will hit, and because without it we would have compared
 against a Python loop, which spec-level fairness forbids.
+
+\paragraph{Two speedups, never conflated.}
+We report both quantities the protocol distinguishes, since they answer different questions. With
+$T(L)$ the latency of an $L$-lane reverse pass, $M$ the committee size and $K$ the sketch budget,
+\begin{equation}
+\text{incremental UQ}=\frac{T(M)-T(1)}{T(1{+}K)-T(1)},
+\qquad
+\text{total force+UQ}=\frac{T(M)}{T(1{+}K)} ,
+\end{equation}
+the first being the cost of uncertainty once the mean force is paid for, the second including it.
+Every figure below states which one it plots, at which batch size, against which implementation.
+Note the incremental ratio is unstable at small batch precisely because $T(1{+}K)\approx T(1)$ there,
+which is the effect this section is about; we therefore lead with the total.
 
 \paragraph{With that baseline, the benefit is regime-dependent.}
 Batched reverse mode is dramatically better at small batch: at $B{=}1$ it takes
@@ -258,20 +275,16 @@ step against $4{,}796$ at $K{=}3$. Sketching linearly reduces repeated execution
 trunk. Batched reverse mode attacks the same redundancy by a different route, which is exactly why
 the two are substitutive at small batch.
 
-\paragraph{A stronger exact baseline.}
-Spec-level fairness demands the exact baseline be as fast as we can make it. Compiling the model
-with \texttt{torch.compile} is possible only partially --- Dynamo builds a sequence-length guard on
-e3nn's \texttt{Irrep} type and calls \texttt{len()} on it, which e3nn raises
-\texttt{NotImplementedError} for by design, so regions must be allowed to fall back to eager. With
-that, compilation is correct to $2.2\times10^{-7}$ and gives $1.04$--$1.10\times$, larger at higher
-lane counts. The scaling is the informative part: the \emph{absolute} saving grows linearly with
-$L$ ($\sim\!1.2$\,ms per lane), so this is not merely a faster forward --- AOTAutograd is producing
-a cheaper backward as well. Fitting both, eager costs $9.80+11.77L$\,ms and compiled
-$11.54+10.31L$\,ms: compilation adds fixed cost and removes $12\%$ of the marginal cost of a lane.
-Because ForceSketch's saving comes precisely from removing lanes, the two are partly substitutive;
-measured against the compiled baseline the total speedups erode by only $2$--$6\%$
-($2.05\times \to 1.97\times$ at $K{=}3$). We report the eager baseline as primary, since it needs
-no fallback workaround, and note this margin.
+\paragraph{Partial compilation.}
+For completeness we also compiled the model. \texttt{torch.compile} succeeds only partially here ---
+Dynamo builds a sequence-length guard on e3nn's \texttt{Irrep} and calls \texttt{len()} on it, which
+e3nn raises \texttt{NotImplementedError} for by design, so untraceable regions must fall back to
+eager. With that, compilation is correct to $\fsCompileRelErr$ and gives
+$\fsCompileSpeedupLo$--$\fsCompileSpeedupHi\times$ at $B{=}16$. The absolute saving grows linearly in
+$L$, so AOTAutograd is producing a cheaper backward rather than merely a faster forward. We report
+the eager batched path as primary because it is portable and needs no fallback workaround, and note
+that compilation would shift the numbers here by at most a few percent in the same direction for
+every method, leaving the crossover of Section~\ref{sec:regime} unchanged.
 
 \subsection{Can approximate screening avoid exact computation?}
 This is where the method succeeds. With a control variate at $r_0{=}2$, $K{=}4$ and $\alpha{=}0.05$,
@@ -294,7 +307,7 @@ Roughly four in five exact force-UQ evaluations are avoided while $97\%$--$99\%$
 high-uncertainty configurations are still routed to the exact computation. These are properties of
 the estimator and are unaffected by the choice of exact implementation.
 
-The wall-clock saving is a different matter, and inherits the regime dependence of Section~5.3. The
+The wall-clock saving is a different matter, and inherits the regime dependence of Section~\ref{sec:regime}. The
 gate pays $K{+}1$ lanes on \emph{every} structure and $M$ lanes on the minority it cannot clear, so
 it only pays off when lanes are expensive. Against the strongest exact baseline it is
 $\fsBestGateSpeedupBSixteen\times$ at $B{=}16$ and $1.26\times$ at $B{=}64$, but
@@ -315,14 +328,16 @@ retained high-uncertainty recall.}
 
 \section{Limitations}
 \label{sec:limitations}
-\textbf{The exact baseline is serial.} \texttt{torch.autograd.grad(is\_grads\_batched=True)} is not
-usable with MACE on e3nn 0.4.4: it succeeds once or twice per process and then fails inside the
-TorchScript interpreter, because the optimized autograd nodes reject vmap's batched tensors. The
-behaviour survives a fresh model instance, disabling e3nn's codegen options, disabling the profiling
-executor, and rebuilding the model unscripted; \texttt{torch.func.vjp} is separately blocked because
-MACE calls \texttt{requires\_grad\_()} inside \texttt{forward}. On a stack where batched reverse-mode
-works, the exact baseline would be faster and our speedups correspondingly smaller. We regard
-reporting this as more useful than quietly comparing against a Python loop.
+\textbf{The systems benefit is regime-dependent, and absent at $B{=}1$.} With batched reverse mode
+enabled, extra cotangent lanes are nearly free at small batch, so ForceSketch's total speedup falls
+to $\fsBestTotalKThreeBOne\times$ and the screening gate becomes a net slowdown
+($\fsBestGateSpeedupBOne\times$). Single-structure MD --- the deployment regime that matters most ---
+is precisely where this method does not pay for itself on this hardware. \textbf{Lane memory.}
+Batched reverse mode holds $L$ cotangent sets at once and exhausts an 8\,GB card at $B{=}64$, where
+the serial loop wins; that crossover will sit elsewhere on a larger accelerator, and we have only one
+GPU. \textbf{\texttt{torch.func} is unavailable}: MACE calls \texttt{requires\_grad\_()} inside
+\texttt{forward}, which functorch forbids, and a globally installed no-op shim silently returns
+all-zero gradients rather than raising --- a trap worth naming.
 \textbf{Other limitations:} the estimator is approximate for $K<M-1$ and, on these systems, not
 accurate enough to replace exact UQ; extreme-value statistics (most-uncertain atom) converge more
 slowly than global ones; committee disagreement is only a proxy for error; calibration may shift
@@ -333,8 +348,9 @@ are e3nn-only.
 \section{Conclusion}
 Exact multi-head force uncertainty cannot be replaced by a handful of randomized head-space VJPs at
 the fidelity acquisition requires: we could not reach 0.90 top-5\% recall below $K\approx6$ of $7$
-on any of four systems, and a concentrated head-space spectrum is not the reason --- the spectrum is
-close to isotropic, so the limit is simply estimator variance at small $K$.
+on any of four systems. The head-space spectrum is moderately concentrated
+($\operatorname{srank}(FQ)=\fsSrankLo$--$\fsSrankHi$ of $7$), which is both why an oblivious random
+sketch pays a variance penalty and why projecting out the leading directions recovers part of it.
 
 It can, however, be \emph{screened}. A conservatively calibrated gate over a control-variate sketch
 avoids roughly four in five exact force-UQ computations while retaining $97$--$99\%$ of

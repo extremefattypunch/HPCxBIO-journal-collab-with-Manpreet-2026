@@ -26,8 +26,10 @@
     0.9681139637091356,
     0.9999999999999998
   ],
-  "stable_rank": 4.640741783551135,
-  "participation_ratio": 4.640741783551136,
+  "stable_rank_FQ": 2.9078691705249358,
+  "stable_rank_A": 1.8220585215191614,
+  "effective_rank": 4.640741783551135,
+  "isotropic_top1_fraction": 0.14285714285714285,
   "top1_fraction": 0.34389442624733957,
   "n_for_90pct": 5
 }
