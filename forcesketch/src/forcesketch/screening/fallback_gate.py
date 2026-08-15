@@ -26,6 +26,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import math
+
 import torch
 from torch import Tensor
 
@@ -48,9 +50,27 @@ class GateCalibration:
 def calibrate(
     s_exact: Tensor, s_hat: Tensor, *, alpha: float, tau: float, eps: float = 1e-30
 ) -> GateCalibration:
-    """Fit c_alpha on the CALIBRATION split only."""
-    ratio = s_exact / (s_hat + eps)
-    c = float(torch.quantile(ratio, 1.0 - alpha))
+    r"""Fit c_alpha on the CALIBRATION split only, by SPLIT CONFORMAL.
+
+    c_alpha is the ceil((n+1)(1-alpha))-th order statistic of the ratios
+    r_i = S_i / (S_hat_i + eps), NOT `torch.quantile(ratio, 1-alpha)`.
+
+    The distinction is not cosmetic. Split conformal guarantees marginal coverage
+        P[ S(x) <= c_alpha * S_hat(x) ] >= 1 - alpha
+    for an exchangeable test point, and the (n+1) is exactly what pays for the
+    unseen point: with n calibration ratios there are n+1 possible ranks for the
+    test ratio. An interpolating quantile of n points is anti-conservative by
+    O(1/n) and carries no finite-sample guarantee at all, which matters here
+    because the coverage claim is the whole basis for calling the gate safe.
+
+    If ceil((n+1)(1-alpha)) > n -- too few calibration points to certify the
+    requested alpha -- there is no finite c_alpha with the guarantee, so we return
+    +inf, which makes the gate skip nothing rather than silently under-cover.
+    """
+    ratio = torch.sort((s_exact / (s_hat + eps)).flatten()).values
+    n = ratio.numel()
+    k = math.ceil((n + 1) * (1.0 - alpha))
+    c = float("inf") if k > n else float(ratio[k - 1])
     return GateCalibration(c_alpha=c, alpha=alpha, tau=tau, eps=eps)
 
 
@@ -59,15 +79,20 @@ class LaneCostModel:
     r"""Latency of an L-lane reverse pass, as T(L) = intercept + slope * L.
 
     Lane COUNT is not lane COST: the forward pass and graph construction are paid
-    once regardless of L. Measured on the 3BPA committee (RTX 5070 Laptop, fp32,
-    CUDA events, 150 iters): T(1) = 21.4 ms and T(8) = 104.9 ms, giving
-    slope = 11.93 ms/lane and intercept = 9.50 ms. Using raw lane counts instead
-    would overstate the gate's speedup, because it would charge the shared forward
-    once per lane.
+    once regardless of L. Using raw lane counts would overstate the gate's speedup,
+    because it would charge the shared forward once per lane.
+
+    THE DEFAULTS BELOW ARE NOT A SECOND COST MODEL. They are a cached copy of the
+    least-squares fit that `analysis.tables.fit_cost_model` computes from
+    `results/raw/lane_scaling_disjoint.jsonl` (serial path, 3BPA, RTX 5070 Laptop,
+    fp32, CUDA events). The paper prints that fit and nothing else, and
+    `tests/test_cost_model.py` fails if these drift apart -- the manuscript
+    previously carried four mutually inconsistent slopes, so this is enforced
+    rather than trusted.
     """
 
-    intercept_ms: float = 9.50
-    slope_ms_per_lane: float = 11.93
+    intercept_ms: float = 10.38
+    slope_ms_per_lane: float = 11.78
 
     def __call__(self, lanes: int) -> float:
         return self.intercept_ms + self.slope_ms_per_lane * lanes

@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import platform
 import subprocess
 from pathlib import Path
@@ -94,6 +95,43 @@ def main() -> int:
             problems.append(f"{f.name} is empty")
         elif not all("git_commit" in r for r in recs):
             problems.append(f"{f.name}: some records lack git_commit")
+
+    # --- double-blind: a named build must not be freezable -----------------
+    # SIMBIOCHEM II is double-blind and states that "failing to submit an
+    # anonymised paper will cause desk rejection". That is unrecoverable -- there
+    # is no rebuttal phase -- so it is checked mechanically rather than by eye,
+    # and checked in the RENDERED PDF as well as the source, because the author
+    # block is set by a style file the source never spells out.
+    IDENTIFYING = ["Ian Poon", "ian_poon", "@fas.harvard", "Harvard",
+                   "Cellular and Molecular Biology", "ianpoon"]
+    paper = Path("paper")
+    for f in sorted(paper.glob("*.tex")):
+        text = f.read_text(errors="ignore")
+        for needle in IDENTIFYING:
+            if needle.lower() in text.lower():
+                problems.append(f"ANONYMITY: {f.name} contains {needle!r}")
+    for opt in ("final", "preprint"):
+        if f"[{opt}]{{neurips_2026}}" in (paper / "main.tex").read_text():
+            problems.append(f"ANONYMITY: neurips_2026 loaded with '{opt}' -- de-anonymises")
+
+    pdf = paper / "main.pdf"
+    if not pdf.exists():
+        problems.append("ANONYMITY: paper/main.pdf absent -- cannot verify the rendered build")
+    else:
+        try:
+            rendered = subprocess.run(["pdftotext", str(pdf), "-"], capture_output=True,
+                                      text=True, check=True).stdout
+            for needle in IDENTIFYING:
+                if needle.lower() in rendered.lower():
+                    problems.append(f"ANONYMITY: rendered PDF contains {needle!r}")
+            if "Anonymous Author" not in rendered:
+                problems.append("ANONYMITY: rendered PDF lacks the anonymous author block")
+            # identifying links are called out explicitly by the call for papers
+            for m in re.findall(r"https?://[^\s)]+", rendered):
+                if not any(h in m for h in ("arxiv.org", "doi.org", "zenodo.org")):
+                    problems.append(f"ANONYMITY: rendered PDF links to {m}")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            problems.append("ANONYMITY: pdftotext unavailable -- cannot verify the rendered build")
 
     # --- regenerate every derived artifact --------------------------------
     a, b = fit_cost_model()

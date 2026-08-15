@@ -1,0 +1,29 @@
+\section*{SIMBIOCHEM Submission Checklist}
+
+\begin{enumerate}
+
+\item {\bf Claims}
+    \item[] Question: Do the main claims in the abstract and introduction accurately reflect the paper's contributions and scope?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The abstract states the negative result first --- that no estimator at $K\le4$ recovers the exact top-5\% acquisition set --- and scopes the positive result to screening. It also states where the wall-clock benefit vanishes ($B{=}1$) rather than only where it holds. Every numeric claim in the paper is generated from the raw result records rather than transcribed, so the text cannot drift from the data.
+
+\item {\bf Limitations}
+    \item[] Question: Does the paper discuss the limitations of the work?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Section~\ref{sec:limitations} states that the systems benefit is absent at batch size~1 and that the screening gate is a net slowdown there; that batched reverse mode exhausts our 8\,GB GPU at $B{=}64$ so the memory crossover is hardware-specific; that we have a single GPU; that \texttt{torch.func} remains unavailable; that committee disagreement is only a proxy for error; that calibration coverage is marginal and under exchangeability, not out-of-distribution; and that rMD17 spans only 9--24 atoms, so molecule size is a weak axis.
+
+\item {\bf AI / LLM disclosure} \emph{(important)}
+    \item[] Answer: \answerYes{}
+    \item[] Justification: An AI coding assistant (Claude) was used extensively throughout: implementing the estimator library, benchmark harness and analysis code; running experiments; diagnosing the TorchScript/TensorExpr interaction described in Appendix~\ref{app:tensorexpr}; and drafting and revising this manuscript. The research question, the experimental design, the decision to lead with the negative result, and all scientific claims were directed and verified by the author, who takes full responsibility for the correctness, originality and integrity of the content. Every quantitative claim traces to a committed raw result record, and the analysis code includes automated audits that fail if a configuration or random seed is dropped from a reported grid.
+
+\item {\bf Research integrity \& originality}
+    \item[] Question: Do you confirm that this is an original submission --- not a duplicate or lightly tweaked resubmission, nor one of multiple versions of the same work submitted to this workshop --- and that you comply with research-integrity guidelines?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: This is original, previously unsubmitted work, submitted once to this workshop. It builds on a published multi-head-committee method, which is cited, and uses that work's publicly released checkpoints and data splits; those artifacts are identified by content hash in the supplement so the provenance is checkable.
+
+\item {\bf Reproducibility} \emph{(optional)}
+    \item[] Question: Where applicable, does the paper provide enough information (data, code, settings) to reproduce the main results?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: All datasets and model checkpoints are public and are pinned by SHA-256 in the supplement manifest, together with the environment lockfile, the exact library commit, and the ten probe seeds, which were frozen before the final evaluation and none of which were discarded. The reported confidence intervals are paired bootstraps over structures with $10^4$ resamples. An anonymised code supplement containing the estimator library, experiment scripts, frozen configuration and raw result records accompanies the submission.
+
+\end{enumerate}

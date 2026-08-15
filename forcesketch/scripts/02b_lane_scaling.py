@@ -7,19 +7,23 @@ lane + M-1 centered directions); ForceSketch(K) needs L = K+1. The ratio
 T(L=8)/T(L=K+1) is the ceiling on the incremental UQ speedup, and spec SS50 kills
 the project if it stays under 1.2x.
 
-Implementation note (measured, not assumed): `is_grads_batched=True` is NOT
-usable on this MACE + e3nn 0.4.4 stack. It succeeds for the first call or two in
-a fresh process and then raises
+Implementation note. This script measures the SERIAL loop only, which is what the
+reference implementation's `get_outputs_committee` does. That is deliberate: the
+lane-cost model T(L) = a + bL that the paper fits is a property of the serial
+path, and mixing implementations into one fit would make the slope meaningless.
+
+It is NOT the strongest available baseline. Batched reverse mode
+(`is_grads_batched=True`) initially appears unusable here -- it succeeds for the
+first two calls in a fresh process and then raises
 
     RuntimeError: Cannot access data pointer of Tensor that doesn't have storage
 
-from inside the TorchScript interpreter, because e3nn's optimized autograd nodes
-cannot accept vmap's BatchedTensor. Disabling jit_script_fx, optimize_einsums and
-specialized_code does not reliably fix it, and neither does rebuilding the model
-unscripted. So the strongest AVAILABLE exact baseline here is the serial loop over
-centered directions -- which is also exactly what the reference implementation
-does in `get_outputs_committee`. Spec SS17 items 3 and 4 are therefore reported as
-unavailable on this stack, with the reason, rather than silently skipped.
+-- but the cause is the TensorExpr fuser fusing the reverse graph of e3nn's
+scripted `_spherical_harmonics`, and disabling that fuser before the first forward
+fixes it (see `forcesketch.adapters.mace_mhc.configure_e3nn_for_batched_vjp`).
+Spec SS45 forbids reporting a speedup against a weaker baseline than the one
+available, so the head-to-head comparison lives in `02d_batched_vs_serial.py` and
+that is what the paper's speedups are measured against.
 
 Per spec SS44: CUDA events, per-iteration timing, >=100 warmup, median + IQR.
 """

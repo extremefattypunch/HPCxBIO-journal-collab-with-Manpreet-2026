@@ -11,8 +11,11 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Measured lane-cost model: T(L) = 9.50 + 11.93 L ms (3BPA, RTX 5070 Laptop, fp32).
-INTERCEPT, SLOPE = 9.50, 11.93
+# The ONE lane-cost model, fitted from results/raw/lane_scaling_disjoint.jsonl.
+# Restating it here as literals is what let the paper carry four different slopes.
+from forcesketch.screening.fallback_gate import LaneCostModel as _LCM
+
+INTERCEPT, SLOPE = _LCM().intercept_ms, _LCM().slope_ms_per_lane
 STYLE = {
     "haar": ("o", "#1f77b4"), "gaussian": ("s", "#d62728"),
     "rademacher": ("^", "#2ca02c"), "pairwise": ("D", "#9467bd"),
@@ -206,7 +209,7 @@ def method_schematic(out: Path, *, M: int = 8, K: int = 4, r0: int = 2) -> None:
 
 
 def k_tradeoff(fidelity_jsonl: Path, out: Path, *, title: str,
-               cost=(10.38, 11.78)) -> None:
+               cost=(INTERCEPT, SLOPE)) -> None:
     """Figure 3 (spec SS53): recall, Spearman and latency against K, per method.
 
     Three panels sharing the K axis, because the spec asks for exactly this

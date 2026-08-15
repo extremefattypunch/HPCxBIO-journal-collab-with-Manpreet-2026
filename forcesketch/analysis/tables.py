@@ -18,7 +18,9 @@ RAW = Path("results/raw")
 PROC = Path("results/processed")
 
 # Measured lane-cost model, refit by `fit_cost_model` from lane_scaling_*.jsonl.
-DEFAULT_COST = (9.50, 11.93)
+# Fallback only; the real value is fitted by `fit_cost_model`. Kept equal to
+# LaneCostModel's cached defaults, which tests/test_cost_model.py enforces.
+DEFAULT_COST = (10.38, 11.78)
 
 
 def load_jsonl(path: Path) -> list[dict]:
@@ -61,8 +63,12 @@ def check_cherry_picking(fidelity: list[dict], expected_seeds: int) -> list[str]
     methods = {k[0] for k in grouped}
     for m in methods:
         ks = sorted({k[1] for k in grouped if k[0] == m})
-        if m in ("gaussian", "rademacher", "pairwise") and ks != [1, 2, 3, 4, 7]:
-            problems.append(f"{m}: K grid is {ks}, expected [1, 2, 3, 4, 7]")
+        # The grid was extended to K=5,6 to settle whether recall reaches 0.90
+        # below the exact basis (it does not). Either grid is acceptable; a
+        # grid MISSING points is not, which is what this guards.
+        if m in ("gaussian", "rademacher", "pairwise") and ks not in ([1, 2, 3, 4, 7],
+                                                                     [1, 2, 3, 4, 5, 6, 7]):
+            problems.append(f"{m}: K grid is {ks}, expected [1,2,3,4,7] or [1,2,3,4,5,6,7]")
     return problems
 
 
@@ -112,6 +118,28 @@ def table2_scaling() -> str:
     return "\n".join(lines)
 
 
+def table_gate_baselines(score: str = "maxcomp") -> str:
+    """The screening-gate comparison: is ForceSketch's gate better than free ones?"""
+    f = RAW / f"07_gate_baselines_{score}.jsonl"
+    if not f.exists():
+        return ""
+    recs = load_jsonl(f)
+    order = ["energy (free)", "head-exact-mean K=4", "haar K=4", "control-variate K=4"]
+    lines = ["| system | gate | lanes | exact skipped | high-UQ recall | speedup |",
+             "|---|---|---:|---:|---:|---:|"]
+    for sysname in ("3bpa", "ethanol", "aspirin", "azobenzene"):
+        for g in order:
+            r = next((x for x in recs if x["system"] == sysname and x["gate"] == g), None)
+            if r is None:
+                continue
+            lines.append(
+                f"| {sysname} | {g} | {r['total_lanes']} "
+                f"| {r['frac_exact_skipped']:.3f} [{r['skip_ci_lo']:.3f}, {r['skip_ci_hi']:.3f}] "
+                f"| {r['high_uq_recall']:.3f} [{r['recall_ci_lo']:.3f}, {r['recall_ci_hi']:.3f}] "
+                f"| {r['screening_speedup']:.2f}x |")
+    return "\n".join(lines)
+
+
 def table3_screening(system_tags: list[str]) -> str:
     """Spec SS54 Table 3, across systems."""
     lines = ["| system | method | K | alpha | exact skipped | high-UQ recall "
@@ -155,9 +183,11 @@ def emit_macros(out: Path) -> dict:
 
     fid = load_jsonl(RAW / "03_sketch_fidelity_disjoint_test_1200K.jsonl")
     g = mean_by(fid, ("method", "K"), ("top5_recall", "spearman"))
-    for K in (2, 3, 4):
-        put(f"fsHaarRecallK{WORD[K]}", g[("haar", K)]["top5_recall"])
-        put(f"fsHaarSpearmanK{WORD[K]}", g[("haar", K)]["spearman"])
+    WORD.update({5: "Five", 6: "Six"})
+    for K in (2, 3, 4, 5, 6):
+        if ("haar", K) in g:
+            put(f"fsHaarRecallK{WORD[K]}", g[("haar", K)]["top5_recall"])
+            put(f"fsHaarSpearmanK{WORD[K]}", g[("haar", K)]["spearman"])
     put("fsHeadSubRecallKThree", g[("head_subsample", 3)]["top5_recall"])
     put("fsGaussRecallKThree", g[("gaussian", 3)]["top5_recall"])
 
@@ -258,7 +288,167 @@ def emit_macros(out: Path) -> dict:
             put("fsCompileRelErr", f"{recs[0]['correctness_rel_err']:.1e}"
                 .replace("e-0", r"\times10^{-").replace("e-", r"\times10^{-") + "}")
 
+    # --- gate baselines (revision Stage C): energy / head-exact-mean / haar / CV
+    gb = RAW / "07_gate_baselines_maxcomp.jsonl"
+    if gb.exists():
+        recs = load_jsonl(gb)
+        SHORT = {"energy (free)": "Energy", "head-exact-mean K=4": "HeadExact",
+                 "haar K=4": "Haar", "control-variate K=4": "CV"}
+        for gate, short in SHORT.items():
+            rs = [r for r in recs if r["gate"] == gate]
+            if not rs:
+                continue
+            put(f"fsGate{short}SkipLo", min(r["frac_exact_skipped"] for r in rs))
+            put(f"fsGate{short}SkipHi", max(r["frac_exact_skipped"] for r in rs))
+            put(f"fsGate{short}RecallLo", min(r["high_uq_recall"] for r in rs))
+            put(f"fsGate{short}RecallHi", max(r["high_uq_recall"] for r in rs))
+            put(f"fsGate{short}SpeedLo", min(r["screening_speedup"] for r in rs), "{:.2f}")
+            put(f"fsGate{short}SpeedHi", max(r["screening_speedup"] for r in rs), "{:.2f}")
+        # per-system rows, so the paper can state the ONE case that is not a
+        # Pareto domination (ethanol: the free energy gate attains recall 1.000)
+        SYS = {"3bpa": "ThreeBPA", "ethanol": "Ethanol",
+               "aspirin": "Aspirin", "azobenzene": "Azobenzene"}
+        for gate, short in SHORT.items():
+            for sysname, sysshort in SYS.items():
+                rs = [r for r in recs if r["gate"] == gate and r["system"] == sysname]
+                if not rs:
+                    continue
+                r = rs[0]
+                put(f"fsGate{short}Skip{sysshort}", r["frac_exact_skipped"])
+                put(f"fsGate{short}Recall{sysshort}", r["high_uq_recall"])
+                put(f"fsGate{short}Speed{sysshort}", r["screening_speedup"], "{:.2f}")
+                put(f"fsGate{short}Recall{sysshort}CI",
+                    f"[{r['recall_ci_lo']:.3f}, {r['recall_ci_hi']:.3f}]")
+                put(f"fsGate{short}Skip{sysshort}CI",
+                    f"[{r['skip_ci_lo']:.3f}, {r['skip_ci_hi']:.3f}]")
+        # how many of the 12 (4 systems x 3 baselines) the control variate dominates
+        ndom = 0
+        for sysname in SYS:
+            cvr = [r for r in recs if r["gate"] == "control-variate K=4" and r["system"] == sysname]
+            if not cvr:
+                continue
+            cv = cvr[0]
+            for gate in SHORT:
+                if gate == "control-variate K=4":
+                    continue
+                b = [r for r in recs if r["gate"] == gate and r["system"] == sysname]
+                if b and cv["frac_exact_skipped"] > b[0]["frac_exact_skipped"] \
+                        and cv["high_uq_recall"] > b[0]["high_uq_recall"]:
+                    ndom += 1
+        put("fsGateCVDominates", str(ndom))
+        put("fsGateCVComparisons", str(len(SYS) * (len(SHORT) - 1)))
+
     import glob as _glob
+
+    # --- max-component acquisition (the PRIMARY rule; revision Stage B) --------
+    # Ranges are across all four systems, so the paper never presents 3BPA as
+    # universal. `rank_bias_ratio` quantifies the extreme-value bias that the
+    # marginal finite-K correction provably does NOT remove (Stage B3).
+    mc = sorted(_glob.glob(str(RAW / "03_sketch_fidelity_*_maxcomp.jsonl")))
+    if mc:
+        per_sys = [mean_by(load_jsonl(Path(f)), ("method", "K"),
+                           ("top5_recall", "spearman", "rank_bias_ratio")) for f in mc]
+        put("fsMaxNSystems", str(len(per_sys)))
+        for K in (2, 3, 4, 5, 6):
+            rows = [g[("haar", K)] for g in per_sys if ("haar", K) in g]
+            if not rows:
+                continue
+            put(f"fsMaxRecallK{WORD[K]}Lo", min(r["top5_recall"] for r in rows))
+            put(f"fsMaxRecallK{WORD[K]}Hi", max(r["top5_recall"] for r in rows))
+            put(f"fsMaxSpearmanK{WORD[K]}Lo", min(r["spearman"] for r in rows))
+            put(f"fsMaxSpearmanK{WORD[K]}Hi", max(r["spearman"] for r in rows))
+        for K in (1, 4):
+            rows = [g[("haar", K)] for g in per_sys if ("haar", K) in g]
+            if rows:
+                put(f"fsMaxBiasK{WORD[K]}Lo", min(r["rank_bias_ratio"] for r in rows), "{:.2f}")
+                put(f"fsMaxBiasK{WORD[K]}Hi", max(r["rank_bias_ratio"] for r in rows), "{:.2f}")
+        # the exactness check: Haar at K=r is the exact basis, so bias must be 1
+        rows = [g[("haar", 7)] for g in per_sys if ("haar", 7) in g]
+        if rows:
+            put("fsMaxBiasExact", max(r["rank_bias_ratio"] for r in rows), "{:.3f}")
+
+    # --- SS5.3 prose numbers (revision F2b): serial-only comparison, and the
+    # kernel-family composition, both of which were literals in the manuscript.
+    bvs = RAW / "02d_batched_vs_serial.jsonl"
+    if bvs.exists():
+        d = {(r["batch_size"], r["lanes"], r["impl"]): r["median_ms"]
+             for r in load_jsonl(bvs)}
+        for B in sorted({k[0] for k in d}):
+            if (B, 8, "serial") in d and (B, 4, "serial") in d:
+                put(f"fsSerialTotalKThreeB{WORD[B]}",
+                    d[(B, 8, "serial")] / d[(B, 4, "serial")], "{:.2f}")
+        # Where does batched reverse mode STOP winning? The manuscript previously
+        # asserted an out-of-memory failure at B=64; the records show it completes
+        # and is simply slower, so we report the measured crossover instead.
+        for B in sorted({k[0] for k in d}):
+            if (B, 8, "batched") in d and (B, 8, "serial") in d:
+                put(f"fsBatchedWinB{WORD[B]}",
+                    d[(B, 8, "serial")] / d[(B, 8, "batched")], "{:.2f}")
+        lost = [B for B in sorted({k[0] for k in d})
+                if all(d.get((B, L, "batched"), 0) > d.get((B, L, "serial"), float("inf"))
+                       for L in range(1, 9))]
+        if lost:
+            put("fsBatchedLosesBatch", str(lost[0]))
+            put("fsBatchedRatioLost",
+                d[(lost[0], 8, "batched")] / d[(lost[0], 8, "serial")], "{:.2f}")
+
+    kb = PROC / "kernel_breakdown.json"
+    if kb.exists():
+        k = json.loads(kb.read_text())
+
+        def frac(tag, fam):
+            f = k[tag]["families"]
+            return 100.0 * f[fam]["ms"] / sum(v["ms"] for v in f.values())
+
+        def launches(tag):
+            return sum(v["launches"] for v in k[tag]["families"].values())
+
+        sketch = [t for t in k if t != "exact"]
+        put("fsKernElemExact", frac("exact", "elementwise / activation"), "{:.1f}")
+        put("fsKernElemSketchLo", min(frac(t, "elementwise / activation") for t in sketch), "{:.1f}")
+        put("fsKernElemSketchHi", max(frac(t, "elementwise / activation") for t in sketch), "{:.1f}")
+        put("fsKernTPExact", frac("exact", "tensor product / e3nn"), "{:.1f}")
+        put("fsKernTPSketchLo", min(frac(t, "tensor product / e3nn") for t in sketch), "{:.1f}")
+        put("fsKernTPSketchHi", max(frac(t, "tensor product / e3nn") for t in sketch), "{:.1f}")
+        put("fsKernDistinct", str(sum(v["kernels"] for v in k["exact"]["families"].values())))
+        # Launch COUNTS are totals over the profiled window, whose iteration count
+        # the record does not carry -- so we report the ratio, which is invariant
+        # to it, rather than a per-step figure we would have to assume.
+        if "haar_K3" in k:
+            put("fsKernLaunchRatio", launches("exact") / launches("haar_K3"), "{:.2f}")
+            put("fsKernLaneRatio", k["exact"]["lanes"] / k["haar_K3"]["lanes"], "{:.2f}")
+
+    # --- per-system paired differences the prose quotes individually (F2b) -----
+    NAMED = {"rmd17-disjoint_aspirin": "Aspirin", "disjoint_test_1200K": "ThreeBPA"}
+    for tag, short in NAMED.items():
+        f = RAW / f"04_bootstrap_{tag}.jsonl"
+        if not f.exists():
+            continue
+        for rec in load_jsonl(f):
+            c = rec.get("comparison", "")
+            if "head_subsample K=3 +mean" in c:
+                nm = f"fsDeltaVsHeadSub{short}"
+            elif "head_subsample K=4" in c:
+                nm = f"fsDeltaVsHeadSubNoMean{short}"
+            else:
+                continue
+            put(nm, rec["delta_top5_recall"])
+            put(nm + "CI", f"[{rec['ci_lo']:.3f}, {rec['ci_hi']:.3f}]")
+
+    # --- seed-to-seed dispersion, the other literal range in SS5.1 -------------
+    fid_files = sorted(_glob.glob(str(RAW / "03_sketch_fidelity_*_maxcomp.jsonl")))
+    sds = []
+    for f in fid_files:
+        recs = load_jsonl(Path(f))
+        for K in (2, 3, 4):
+            seed_vals = [r["top5_recall"] for r in recs
+                         if r["method"] == "haar" and r["K"] == K]
+            if len(seed_vals) > 1:
+                sds.append(float(np.std(seed_vals, ddof=1)))
+    if sds:
+        put("fsSeedSdLo", min(sds), "{:.2f}")
+        put("fsSeedSdHi", max(sds), "{:.2f}")
+
     sps = sorted(_glob.glob(str(PROC / "spectrum_*.json")))
     if sps:
         specs = [json.loads(Path(f).read_text()) for f in sps]
@@ -269,9 +459,43 @@ def emit_macros(out: Path) -> dict:
             put("fsSrankHi", max(sr), "{:.2f}")
         put("fsTopEigLo", min(t1))
         put("fsTopEigHi", max(t1))
-        put("fsTopEigIsotropic", specs[0].get("isotropic_top1_fraction", 1 / 7))
+        iso = specs[0].get("isotropic_top1_fraction", 1 / 7)
+        put("fsTopEigIsotropic", iso)
+        put("fsTopEigRatioLo", min(t1) / iso, "{:.1f}")
+        put("fsTopEigRatioHi", max(t1) / iso, "{:.1f}")
 
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("% Generated by analysis/tables.py -- do not edit by hand.\n"
                    + "\n".join(macros) + "\n")
     return vals
+
+
+def table_batched_vs_serial(batch_sizes=(1, 16), lanes=(1, 4, 8)) -> str:
+    """The SS5.3 latency table, generated (revision F2b).
+
+    This table was hand-written into the manuscript, which is precisely how a
+    paper drifts from its own data: nine literal decimals with no path back to a
+    record. Emitting it means the numbers cannot silently go stale.
+    """
+    recs = load_jsonl(RAW / "02d_batched_vs_serial.jsonl")
+    d = {(r["batch_size"], r["lanes"], r["impl"]): r["median_ms"] for r in recs}
+    atoms = {r["batch_size"]: r["num_atoms"] for r in recs}
+    head = " & ".join(f"\\multicolumn{{2}}{{c}}{{$B={B}$ ({atoms[B]} atoms)}}" for B in batch_sizes)
+    rows = [f"\\begin{{tabular}}{{r{'rr' * len(batch_sizes)}}}", "\\toprule",
+            f" & {head} \\\\",
+            "lanes $L$ & " + " & ".join("serial & batched" for _ in batch_sizes) + " \\\\",
+            "\\midrule"]
+    for L in lanes:
+        cells = []
+        for B in batch_sizes:
+            for impl in ("serial", "batched"):
+                t = d.get((B, L, impl))
+                if t is None:
+                    cells.append("---")
+                    continue
+                other = d.get((B, L, "batched" if impl == "serial" else "serial"))
+                win = other is not None and t < other
+                cells.append(f"\\textbf{{{t:.1f}}}" if win else f"{t:.1f}")
+        rows.append(f"{L} & " + " & ".join(cells) + " \\\\")
+    rows += ["\\bottomrule", "\\end{tabular}"]
+    return "\n".join(rows)

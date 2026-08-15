@@ -192,6 +192,8 @@ def run_torch_profiler(adapter, batch, configs, *, iters: int, warmup: int, out:
               f"{cnt//iters:>5}x/iter  {k[:56]}")
 
     Path("results/processed").mkdir(parents=True, exist_ok=True)
+    for _v in results.values():          # provenance: launch counts are window totals
+        _v["iters"] = iters
     Path("results/processed/kernel_breakdown.json").write_text(json.dumps(results, indent=2))
     print("\nwrote results/processed/kernel_breakdown.json")
     return 0
