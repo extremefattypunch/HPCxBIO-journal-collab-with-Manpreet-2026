@@ -28,7 +28,8 @@ Haar-orthogonal estimators with exact finite-$K$ standard-deviation corrections,
 against exact committee uncertainty on 3BPA and three rMD17 molecules with a pretrained eight-head
 MACE committee. Our answer is negative for \emph{replacement} and positive for \emph{screening}.
 At $K\!\le\!4$ no estimator recovers the exact top-5\% uncertainty set reliably (best
-\fsHaarRecallKFour{} for Haar at $K{=}4$), so sketching cannot substitute for exact force UQ. But a
+\fsHaarRecallKFour{} \fsHaarRecallKFourCI{} for Haar at $K{=}4$), so sketching cannot substitute
+for exact force UQ. But a
 conservatively calibrated gate, built on a low-rank head-space control variate, skips
 \fsGateSkipThreeBPA{} of exact evaluations while retaining \fsGateRecallThreeBPA{} of
 high-uncertainty configurations on 3BPA, and generalizes to all three rMD17 molecules. Reducing
@@ -144,30 +145,45 @@ $T(L)=\fsCostIntercept + \fsCostSlope\,L$\,ms.
 \section{Results}
 
 \subsection{Can force disagreement be sketched?}
-Table~\ref{tab:primary} and Figure~\ref{fig:pareto} give the answer: partially, and not well enough
-to replace exact computation. Haar is the best sketch at every budget --- top-5\% recall
-\fsHaarRecallKTwo, \fsHaarRecallKThree{} and \fsHaarRecallKFour{} at $K=2,3,4$ --- and beats Gaussian
-by the margin the variance ratio predicts (\fsGaussRecallKThree{} at $K{=}3$). Rank correlation is
-respectable (Spearman \fsHaarSpearmanKFour{} at $K{=}4$), but tail selection is not: no method
-approaches the 0.90 recall that would justify substitution.
+Figure~\ref{fig:pareto} gives the answer: partially, and not well enough to replace exact
+computation. Haar is the best sketch at every budget --- top-5\% recall \fsHaarRecallKTwo,
+\fsHaarRecallKThree{} \fsHaarRecallKThreeCI{} and \fsHaarRecallKFour{} \fsHaarRecallKFourCI{} at
+$K=2,3,4$. Rank correlation is respectable (Spearman \fsHaarSpearmanKFour{}
+\fsHaarSpearmanKFourCI{} at $K{=}4$), but tail selection is not: no method approaches the 0.90
+recall that would justify substitution. All intervals are 95\% paired bootstrap over structures
+($10^3$ resamples), computed on the seed-averaged statistic; seed-to-seed standard deviations are
+$0.03$--$0.06$ and are reported separately in the result records.
+
+Orthogonalizing the probes is the largest single lever in the method. The paired difference between
+Haar and Gaussian at $K{=}3$, evaluated on identical structure resamples, is
+$\fsDeltaOrtho$ \fsDeltaOrthoCI{} in top-5\% recall, and is significant on all four systems. The
+low-rank control variate adds a further $\fsDeltaCV$ \fsDeltaCVCI{} over Haar at $K{=}4$, reaching
+\fsCVRecallKFour{} \fsCVRecallKFourCI{} --- still short of 0.90.
 
 The head-space spectrum rules out the obvious explanation. Its stable rank is \fsStableRank{} of a
 maximum 7 (leading direction \fsTopEigFraction{} of the energy), i.e.\ close to isotropic --- the
 regime that \emph{favours} random sketching. The limit is simply estimator variance at small $K$.
 
 \subsection{Does sketching beat using fewer heads?}
-It depends on whether an exact mean force is required, and we report both framings. At equal total
-reverse lanes \emph{with} an exact mean force, Haar at $K{=}3$ (\fsHaarRecallKThree) beats head
-subsampling at $K{=}3$ plus a mean lane (\fsHeadSubRecallKThree). Head subsampling at $K{=}4$ with no
-mean lane scores higher still, but cannot produce the mean force that molecular dynamics requires.
-Reporting only one framing would settle this comparison by definition rather than by measurement.
+It depends on whether an exact mean force is required, and the two framings give opposite answers,
+so we report both. At equal total reverse lanes \emph{with} an exact mean force, Haar at $K{=}3$
+beats head subsampling at $K{=}3$ plus a mean lane by $\fsDeltaVsHeadSub$ \fsDeltaVsHeadSubCI{} in
+top-5\% recall (paired bootstrap on identical resamples). That ordering is significant on 3BPA,
+ethanol and azobenzene, and consistent in sign but \emph{not} significant on aspirin
+($+0.030$, CI $[-0.022, 0.070]$). Conversely, head subsampling at $K{=}4$ with no mean lane spends the
+same four lanes and scores significantly \emph{higher} ($-0.059$, CI $[-0.094,-0.023]$ for Haar) ---
+but it cannot produce the mean force molecular dynamics requires. Reporting a single framing would
+have settled this comparison by definition rather than by measurement.
 
 \subsection{Does reducing directions reduce GPU time?}
-Yes, and uniformly. The measured ceiling on incremental UQ speedup, $T(L{=}8)/T(L{=}K{+}1)$, is
-$\fsCeilingKThreeBOne\times$ at $K{=}3$ and $\fsCeilingKTwoBOne\times$ at $K{=}2$, and is flat across
-batch sizes $B\in\{1,4,16,64\}$ ($\fsCeilingKThreeBSixtyFour\times$ at $B{=}64$). Real MACE is
-compute-bound even at $B{=}1$, so the launch-bound regime in which extra cotangent lanes ride along
-free never occurs. We report an important caveat in Section~\ref{sec:limitations}: our exact baseline
+Yes, and remarkably uniformly. The measured ceiling on incremental UQ speedup,
+$T(L{=}8)/T(L{=}K{+}1)$, is $\fsCeilingKThreeBOne\times$ at $K{=}3$ and $\fsCeilingKTwoBOne\times$
+at $K{=}2$. Sweeping batch sizes $B\in\{1,4,16,64\}$ and three molecules spanning 9 to 27 atoms,
+that ceiling stays within $1.77$--$1.87\times$ at $K{=}3$ and $2.17$--$2.39\times$ at $K{=}2$. This
+answers spec-level question of what the saving actually depends on: \emph{the reverse-lane count},
+not the atom count and not the batch size. Real MACE is compute-bound even at $B{=}1$ (a single
+lane costs $\sim\!21$\,ms for 27 atoms), so the launch-bound regime in which extra cotangent lanes
+would ride along free never occurs on this hardware. We report an important caveat in Section~\ref{sec:limitations}: our exact baseline
 is a serial loop, because batched reverse-mode is unusable on this software stack.
 
 \subsection{Can approximate screening avoid exact computation?}

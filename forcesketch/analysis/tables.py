@@ -161,6 +161,40 @@ def emit_macros(out: Path) -> dict:
             put(f"fsGateRecall{short}", gg[key]["high_uq_recall"])
             put(f"fsGateSpeedup{short}", gg[key]["screening_speedup"], "{:.2f}")
 
+    # --- bootstrap CIs (spec SS47). The manuscript must never quote a bare mean.
+    bs = RAW / "04_bootstrap_disjoint_test_1200K.jsonl"
+    if bs.exists():
+        recs = load_jsonl(bs)
+        by = {(r["method"], r["K"], r["r0"], r.get("with_mean_lane", False)): r
+              for r in recs if r["experiment_id"] == "04_bootstrap_ci"}
+        for K in (2, 3, 4):
+            r = by.get(("haar", K, 0, False))
+            if r:
+                put(f"fsHaarRecallK{WORD[K]}CI",
+                    f"[{r['top5_recall_ci_lo']:.3f}, {r['top5_recall_ci_hi']:.3f}]")
+                put(f"fsHaarSpearmanK{WORD[K]}CI",
+                    f"[{r['spearman_ci_lo']:.3f}, {r['spearman_ci_hi']:.3f}]")
+        r = by.get(("control_variate", 4, 2, False))
+        if r:
+            put("fsCVRecallKFour", r["top5_recall"])
+            put("fsCVRecallKFourCI",
+                f"[{r['top5_recall_ci_lo']:.3f}, {r['top5_recall_ci_hi']:.3f}]")
+            put("fsCVSpearmanKFour", r["spearman"])
+        # paired differences -- the statistic that actually decides SS49
+        for rec in recs:
+            if rec["experiment_id"] != "04_bootstrap_diff":
+                continue
+            if "head_subsample K=3 +mean" in rec["comparison"]:
+                nm = "fsDeltaVsHeadSub"
+            elif "gaussian" in rec["comparison"]:
+                nm = "fsDeltaOrtho"
+            elif "control_variate" in rec["comparison"]:
+                nm = "fsDeltaCV"
+            else:
+                continue
+            put(nm, rec["delta_top5_recall"])
+            put(nm + "CI", f"[{rec['ci_lo']:.3f}, {rec['ci_hi']:.3f}]")
+
     sp = PROC / "spectrum_disjoint_test_1200K.json"
     if sp.exists():
         s = json.loads(sp.read_text())
