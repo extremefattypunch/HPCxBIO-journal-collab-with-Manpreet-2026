@@ -178,6 +178,17 @@ The head-space spectrum rules out the obvious explanation. Its stable rank is \f
 maximum 7 (leading direction \fsTopEigFraction{} of the energy), i.e.\ close to isotropic --- the
 regime that \emph{favours} random sketching. The limit is simply estimator variance at small $K$.
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/fig3_k_tradeoff.png}
+\caption{Accuracy and cost against $K$. The latency curves coincide exactly for every method,
+because cost depends only on the lane count --- so the two accuracy panels are the whole trade-off.
+Ranking saturates well before tail selection does: Haar clears $\rho=0.85$ at $K{=}4$ while its
+top-5\% recall is still $\fsHaarRecallKFour$. Error bars are the standard deviation across the ten
+frozen seeds.}
+\label{fig:ktradeoff}
+\end{figure}
+
 \subsection{Does sketching beat using fewer heads?}
 It depends on whether an exact mean force is required, and the two framings give opposite answers,
 so we report both. At equal total reverse lanes \emph{with} an exact mean force, Haar at $K{=}3$

@@ -203,3 +203,55 @@ def method_schematic(out: Path, *, M: int = 8, K: int = 4, r0: int = 2) -> None:
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=200, bbox_inches="tight")
     plt.close(fig)
+
+
+def k_tradeoff(fidelity_jsonl: Path, out: Path, *, title: str,
+               cost=(10.38, 11.78)) -> None:
+    """Figure 3 (spec SS53): recall, Spearman and latency against K, per method.
+
+    Three panels sharing the K axis, because the spec asks for exactly this
+    comparison and because the curves disagree in an informative way -- ranking
+    saturates far earlier than tail selection does.
+    """
+    a, b = cost
+    recs = load_jsonl(fidelity_jsonl)
+    agg: dict[tuple, dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    for r in recs:
+        if r["method"] == "head_subsample" and not r["with_mean_lane"]:
+            continue
+        agg[(r["method"], r["K"])]["recall"].append(r["top5_recall"])
+        agg[(r["method"], r["K"])]["rho"].append(r["spearman"])
+        agg[(r["method"], r["K"])]["lanes"].append(r["total_lanes"])
+
+    fig, axes = plt.subplots(1, 3, figsize=(11.5, 3.5))
+    panels = [("recall", "top-5% recall of exact set", 0.90, "H2 target"),
+              ("rho", "Spearman with exact $S$", 0.85, r"$\rho$ gate"),
+              ("lanes", "total force+UQ latency [ms]", None, None)]
+
+    for ax, (field, ylabel, hline, hlabel) in zip(axes, panels):
+        for method in STYLE:
+            pts = sorted((K, float(np.mean(v[field])), float(np.std(v[field])))
+                         for (m, K), v in agg.items() if m == method)
+            if not pts:
+                continue
+            marker, colour = STYLE[method]
+            x, y, sd = zip(*pts)
+            if field == "lanes":
+                y = [a + b * yi for yi in y]
+                sd = [0.0] * len(y)
+            ax.errorbar(x, y, yerr=sd, marker=marker, color=colour, lw=1.4, ms=6,
+                        capsize=2, alpha=0.9, label=method.replace("_", " "))
+        if hline is not None:
+            ax.axhline(hline, ls="--", c="0.45", lw=1)
+            ax.text(ax.get_xlim()[1], hline + 0.012, hlabel, ha="right", fontsize=7.5,
+                    color="0.35")
+        ax.set_xlabel("$K$ (uncertainty directions)")
+        ax.set_ylabel(ylabel, fontsize=9)
+        ax.grid(alpha=0.25)
+        ax.set_xticks([1, 2, 3, 4, 7])
+    axes[0].legend(fontsize=7.5, loc="upper left")
+    fig.suptitle(title, fontsize=10)
+    fig.tight_layout()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
