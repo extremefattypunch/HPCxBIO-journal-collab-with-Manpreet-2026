@@ -129,13 +129,92 @@ def timed_phases(adapter, batch, bundle, *, iters: int, warmup: int,
     }
 
 
+def run_torch_profiler(adapter, batch, configs, *, iters: int, warmup: int, out: str) -> int:
+    """Per-kernel CUDA breakdown for the exact and sketch paths (spec SS46)."""
+    import re
+    from collections import defaultdict
+
+    from torch.profiler import ProfilerActivity, profile
+
+    FAMILIES = [
+        ("tensor product / e3nn", r"tensor_product|einsum|bmm|baddbmm"),
+        ("GEMM / linear", r"gemm|Gemm|GEMM|cutlass|xmma|addmm|matmul|sgemm"),
+        ("scatter / gather / index", r"scatter|gather|index|Index|embedding|sort|Sort"),
+        ("reduction", r"reduce|Reduce|sum_kernel|norm|softmax|var_|mean"),
+        ("elementwise / activation", r"elementwise|Elementwise|vectorized|silu|tanh|"
+                                     r"mul|add|copy|fill|div|sub|pow|sqrt|exp|neg"),
+        ("memory ops", r"Memcpy|Memset|memcpy|memset|direct_copy"),
+    ]
+
+    def classify(n: str) -> str:
+        for fam, pat in FAMILIES:
+            if re.search(pat, n):
+                return fam
+        return "other"
+
+    results = {}
+    for name, bundle in configs:
+        for _ in range(warmup):
+            adapter.vjp_for_seeds(batch, bundle.seeds, batched=False)
+        torch.cuda.synchronize()
+        with profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA]) as prof:
+            for _ in range(iters):
+                adapter.vjp_for_seeds(batch, bundle.seeds, batched=False)
+            torch.cuda.synchronize()
+
+        kern = defaultdict(lambda: [0.0, 0])
+        for e in prof.key_averages():
+            t = getattr(e, "self_device_time_total", 0) or 0
+            if t <= 0:
+                continue
+            kern[e.key][0] += t / 1e3      # us -> ms
+            kern[e.key][1] += e.count
+        total = sum(v[0] for v in kern.values())
+        fam = defaultdict(lambda: [0.0, 0, 0])
+        for k, (ms, cnt) in kern.items():
+            f = fam[classify(k)]
+            f[0] += ms; f[1] += cnt; f[2] += 1
+        results[name] = {"total_ms": total, "lanes": bundle.K,
+                         "families": {k: {"ms": v[0], "launches": v[1], "kernels": v[2]}
+                                      for k, v in fam.items()},
+                         "top": sorted(([k, v[0], v[1]] for k, v in kern.items()),
+                                       key=lambda r: -r[1])[:12]}
+
+        print(f"\n=== {name} (L={bundle.K}), {iters} iters, "
+              f"{total:.1f} ms GPU total, {len(kern)} distinct kernels ===")
+        print(f"{'family':<28}{'GPU %':>8}{'ms/iter':>10}{'launches/iter':>15}")
+        for f, v in sorted(fam.items(), key=lambda kv: -kv[1][0]):
+            print(f"{f:<28}{100*v[0]/total:>7.1f}%{v[0]/iters:>10.2f}{v[1]/iters:>15.1f}")
+
+    print(f"\ntop kernels, exact path")
+    for k, ms, cnt in results["exact"]["top"][:8]:
+        print(f"  {100*ms/results['exact']['total_ms']:5.1f}%  {ms/iters:7.2f} ms/iter  "
+              f"{cnt//iters:>5}x/iter  {k[:56]}")
+
+    Path("results/processed").mkdir(parents=True, exist_ok=True)
+    Path("results/processed/kernel_breakdown.json").write_text(json.dumps(results, indent=2))
+    print("\nwrote results/processed/kernel_breakdown.json")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--iters", type=int, default=100)
     ap.add_argument("--warmup", type=int, default=40)
+    ap.add_argument("--nvtx", action="store_true",
+                    help="emit phase-level NVTX ranges (forward / vjp / reduce)")
     ap.add_argument("--nvtx-modules", action="store_true",
-                    help="add per-submodule NVTX ranges (for nsys, not for timing)")
+                    help="ALSO add per-submodule ranges. WARNING: ~100 push/pop pairs per "
+                         "forward saturates the nsys NVTX buffer and stalls the capture "
+                         "(observed: 14 min at 0%% GPU). Phase-level ranges answer the SS46 "
+                         "questions; use this only on a handful of iterations.")
+    ap.add_argument("--torch-profiler", action="store_true",
+                    help="per-kernel CUDA attribution via torch.profiler. Preferred over "
+                         "nsys on this stack: nsys traces the whole process, and e3nn's "
+                         "TorchScript codegen at model load takes many minutes under it "
+                         "(observed: an 8-minute capture never reached a CUDA kernel). "
+                         "torch.profiler attaches only around the region of interest.")
     ap.add_argument("--ncu", action="store_true",
                     help="run exactly ONE measured step inside one NVTX range")
     ap.add_argument("--out", default="results/raw/08_profile.jsonl")
@@ -167,6 +246,10 @@ def main() -> int:
         torch.cuda.synchronize()
         return 0
 
+    if args.torch_profiler:
+        return run_torch_profiler(adapter, batch, configs, iters=args.iters,
+                                  warmup=args.warmup, out=args.out)
+
     sha, dirty = git_commit()
     records = []
     print(f"3BPA disjoint, B={args.batch_size} ({args.batch_size * len(frames[0])} atoms), "
@@ -176,7 +259,7 @@ def main() -> int:
     print("-" * 74)
     for name, bundle in configs:
         m = timed_phases(adapter, batch, bundle, iters=args.iters, warmup=args.warmup,
-                         nvtx_on=args.nvtx_modules)
+                         nvtx_on=args.nvtx or args.nvtx_modules)
         m.update({"experiment_id": "08_profile", "git_commit": sha, "git_dirty": dirty,
                   "dataset": "3bpa", "config": name, "lanes": bundle.K,
                   "batch_size": args.batch_size, "num_heads": M, "precision": "fp32",

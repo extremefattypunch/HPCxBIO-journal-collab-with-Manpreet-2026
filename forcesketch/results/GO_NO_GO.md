@@ -129,11 +129,23 @@ reporting that.
    `torch.func` variants and unmeasured for the compiled-forward one; §31's batch
    sweep is covered by the lane scan at B in {1,4,16,64}.
 
-6. **NVTX attribution is partial.** e3nn ships 18 compiled `ScriptModule`s and
-   TorchScript rejects forward hooks on them, so per-module ranges stop at the
-   tensor-product boundary. Their time is attributed to the enclosing range rather
-   than lost, but kernel-level attribution *inside* the tensor products is not
-   available through this route.
+6. **Nsight Systems is not usable on this stack; kernel attribution came from
+   `torch.profiler` instead.** Two independent obstacles: (a) e3nn ships 18 compiled
+   `ScriptModule`s and TorchScript rejects forward hooks on them, so per-module NVTX
+   ranges stop at the tensor-product boundary; (b) more fundamentally, nsys traces
+   the whole process, and e3nn's TorchScript codegen at model load is so slow under
+   it that an 8-minute capture never reached a single CUDA kernel (the resulting
+   trace contains no kernel data). A separate hang was diagnosed to nsys waiting on
+   re-parented children and is fixed by `--wait=primary`. `torch.profiler` attaches
+   only around the region of interest and answers §46's question directly.
+
+7. **Kernel-level finding (§46).** The GPU-time composition is invariant in lane
+   count -- elementwise 42.2% at L=7 vs 41.5-41.9% at L=2,3,4; tensor products 21.3%
+   vs 20.0-20.9%; GEMM 16.2% vs 16.3-16.4%; the same 134 distinct kernels throughout.
+   Only the repetition count changes (10,161 launches per exact step vs 4,796 at
+   K=3). So sketching reduces repeated trunk execution linearly, which is the
+   cleanest possible mechanism and means no kernel-level optimization is being
+   left on the table.
 
 5. **rMD17 spans 9–24 atoms**, so molecule size is a weak axis; the size story rests
    on atoms-per-batch.

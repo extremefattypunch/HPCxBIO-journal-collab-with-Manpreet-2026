@@ -191,9 +191,18 @@ within $1.77$--$1.87\times$ and $2.17$--$2.39\times$. What the saving tracks is 
 \emph{the reverse-lane count} --- not the atom count and not the batch size. Real MACE is
 compute-bound even at $B{=}1$ (one lane costs $\sim\!21$\,ms for 27 atoms), so the launch-bound
 regime in which extra cotangent lanes would ride along free never occurs on this hardware.
-A profile at $B{=}16$ confirms the mechanism: the shared forward is only $9.4$\,ms of a
-$100.6$\,ms exact step, so the reverse pass dominates by roughly an order of magnitude and each
-removed lane removes $\sim\!12$\,ms of it. We report an important caveat in Section~\ref{sec:limitations}: our exact baseline
+A kernel-level profile at $B{=}16$ confirms the mechanism. The shared forward is only $9.4$\,ms of
+a $100.6$\,ms exact step, so the reverse pass dominates by roughly an order of magnitude. More
+tellingly, the \emph{composition} of GPU time is invariant in the lane count: elementwise and
+activation kernels take $42.2\%$ of device time at $L{=}7$ and $41.5$--$41.9\%$ at $L{=}2,3,4$;
+e3nn tensor products $21.3\%$ versus $20.0$--$20.9\%$; GEMMs $16.2\%$ versus $16.3$--$16.4\%$; and
+the same $134$ distinct kernels appear in every configuration. What changes is only how many times
+they run --- $10{,}161$ launches per exact step against $4{,}796$ at $K{=}3$. Sketching therefore
+saves time in the most straightforward way available: it \emph{linearly reduces repeated execution
+of the shared trunk}, with no kernel disproportionately dominating at high lane count and no fixed
+cost being amortized away. Fitting device time gives $\approx\!10.8$\,ms per lane against the
+$\fsCostSlope$\,ms per lane measured in wall-clock, the gap being launch gaps not counted as kernel
+time. We report an important caveat in Section~\ref{sec:limitations}: our exact baseline
 is a serial loop, because batched reverse-mode is unusable on this software stack.
 
 \subsection{Can approximate screening avoid exact computation?}
