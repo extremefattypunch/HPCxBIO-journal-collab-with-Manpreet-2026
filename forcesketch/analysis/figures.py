@@ -301,13 +301,13 @@ def gate_pareto(gate_jsonl: Path, out: Path, *, title: str) -> None:
         if gate == "control-variate K=4":
             # The control-variate points cluster tightly (that IS the result), so
             # the labels must be staggered or they overprint one another.
-            OFFSETS = {"3bpa": (8, 8), "ethanol": (-46, 8),
-                       "aspirin": (8, -14), "azobenzene": (-58, -14)}
+            OFFSETS = {"3bpa": (10, 10), "ethanol": (-58, 10),
+                       "aspirin": (10, -18), "azobenzene": (-74, -18)}
             for r in rs:
                 ax.annotate(r["system"], (r["frac_exact_skipped"], r["high_uq_recall"]),
                             textcoords="offset points",
                             xytext=OFFSETS.get(r["system"], (6, -10)),
-                            fontsize=7, color="0.25")
+                            fontsize=9, color="0.15", fontweight="semibold")
 
     ax.axhline(0.95, ls=":", c="0.5", lw=1)
     ax.text(0.02, 0.951, "0.95 recall", fontsize=7, color="0.4")
@@ -316,7 +316,54 @@ def gate_pareto(gate_jsonl: Path, out: Path, *, title: str) -> None:
     ax.set_title(title, fontsize=10)
     ax.set_xlim(0, 1)
     ax.grid(alpha=0.25)
-    ax.legend(fontsize=7.5, loc="lower left", framealpha=0.95)
+    ax.legend(fontsize=8.5, loc="lower left", framealpha=0.95)
+    fig.tight_layout()
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out, dpi=160)
+    plt.close(fig)
+
+
+def maxcomp_recall(out: Path, *, pattern: str = "03_sketch_fidelity_*_maxcomp.jsonl",
+                   raw: Path = Path("results/raw")) -> None:
+    """Top-5% recall vs K under the PRIMARY max-component rule, all systems.
+
+    The paper declares max-component acquisition primary but previously showed it
+    only in prose, while both figures plotted the easier global statistic. This is
+    the negative result made visible: recall climbs steadily with K and still does
+    not reach the 0.90 line at K=6, on any system -- the exact basis is the only
+    budget that recovers the tail.
+    """
+    import glob
+
+    LABEL = {"disjoint_test_1200K": "3BPA @ 1200 K", "rmd17-disjoint_ethanol": "ethanol",
+             "rmd17-disjoint_aspirin": "aspirin", "rmd17-disjoint_azobenzene": "azobenzene"}
+    MARK = ["o", "s", "^", "D"]
+
+    fig, ax = plt.subplots(figsize=(5.6, 4.2))
+    for i, f in enumerate(sorted(glob.glob(str(raw / pattern)))):
+        recs = [r for r in load_jsonl(Path(f)) if r["method"] == "haar"]
+        if not recs:
+            continue
+        tag = Path(f).stem.replace("03_sketch_fidelity_", "").replace("_maxcomp", "")
+        by = defaultdict(list)
+        for r in recs:
+            by[r["K"]].append(r["top5_recall"])
+        Ks = sorted(by)
+        mu = np.array([np.mean(by[k]) for k in Ks])
+        sd = np.array([np.std(by[k], ddof=1) if len(by[k]) > 1 else 0.0 for k in Ks])
+        ax.errorbar(Ks, mu, yerr=sd, marker=MARK[i % len(MARK)], capsize=3,
+                    lw=1.6, ms=5, label=LABEL.get(tag, tag))
+
+    ax.axhline(0.90, ls="--", c="crimson", lw=1.2)
+    ax.text(6.9, 0.915, "0.90 = replacement quality", color="crimson", fontsize=8,
+            ha="right")
+    ax.set_xlabel("head-space directions $K$   (exact basis at $K=7$)")
+    ax.set_ylabel(r"top-5% recall under $u^{\max\mathrm{-comp}}$")
+    ax.set_title("Primary acquisition rule: the tail is not recovered\nuntil the budget is exact",
+                 fontsize=10)
+    ax.set_ylim(0, 1.04)
+    ax.grid(alpha=0.25)
+    ax.legend(fontsize=8, loc="lower right", framealpha=0.95)
     fig.tight_layout()
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=160)

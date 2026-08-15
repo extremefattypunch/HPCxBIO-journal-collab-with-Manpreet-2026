@@ -266,13 +266,26 @@ def emit_macros(out: Path) -> dict:
     if bv.exists():
         d = {(r["batch_size"], r["lanes"], r["impl"]): r["median_ms"]
              for r in load_jsonl(bv)}
-        SKIP = 0.860   # control variate r0=2, K=4, alpha=0.05, 3BPA
+        # Read the skip fraction from the gate records rather than restating it:
+        # it was hardcoded at 0.860 here while the measured 3BPA value moved to
+        # 0.844, so the two disagreed silently.
+        _gb = RAW / "07_gate_baselines_maxcomp.jsonl"
+        SKIP = 0.844
+        if _gb.exists():
+            _cv = [r for r in load_jsonl(_gb)
+                   if r["gate"] == "control-variate K=4" and r["system"] == "3bpa"]
+            if _cv:
+                SKIP = _cv[0]["frac_exact_skipped"]
         for B in (1, 16):
-            best = {L: min(d[(B, L, "serial")], d[(B, L, "batched")]) for L in (1, 4, 5, 8)}
+            best = {L: min(d[(B, L, "serial")], d[(B, L, "batched")])
+                    for L in (1, 3, 4, 5, 8)}
             put(f"fsBestTotalKThreeB{WORD[B]}", best[8] / best[4], "{:.2f}")
             put(f"fsBestIncrKThreeB{WORD[B]}",
                 (best[8] - best[1]) / (best[4] - best[1]), "{:.2f}")
-            gate = best[5] + (1 - SKIP) * best[8]
+            # Uniform fallback accounting (see gate_metrics): the gate has already
+            # evaluated 4 independent centered directions, so completing the exact
+            # basis costs r-4 = 3 further lanes, not a fresh 8.
+            gate = best[5] + (1 - SKIP) * best[3]
             put(f"fsBestGateSpeedupB{WORD[B]}", best[8] / gate, "{:.2f}")
         put("fsBatchedFlatLaneOne", d[(1, 1, "batched")], "{:.1f}")
         put("fsBatchedFlatLaneEight", d[(1, 8, "batched")], "{:.1f}")
@@ -321,6 +334,25 @@ def emit_macros(out: Path) -> dict:
                     f"[{r['recall_ci_lo']:.3f}, {r['recall_ci_hi']:.3f}]")
                 put(f"fsGate{short}Skip{sysshort}CI",
                     f"[{r['skip_ci_lo']:.3f}, {r['skip_ci_hi']:.3f}]")
+        # Split sizes and realised test prevalence. The reviewer's question -- is
+        # the conformal calibration split really disjoint from the split that fit
+        # Q_{r0}? -- has to be answerable from the PDF, not from the code.
+        for sysname, sysshort in SYS.items():
+            rs = [r for r in recs if r["system"] == sysname]
+            if not rs or "n_design" not in rs[0]:
+                continue
+            put(f"fsNDesign{sysshort}", str(rs[0]["n_design"]))
+            put(f"fsNCal{sysshort}", str(rs[0]["n_cal"]))
+            put(f"fsNTest{sysshort}", str(rs[0]["n_test"]))
+        prev = [r["test_prevalence"] for r in recs if "test_prevalence" in r]
+        if prev:
+            put("fsTestPrevalenceLo", min(prev))
+            put("fsTestPrevalenceHi", max(prev))
+        lc = {r.get("lanes_complete") for r in recs if "lanes_complete" in r}
+        if lc:
+            put("fsFallbackLanesSketch", f"{int(min(lc))}")
+            put("fsFallbackLanesEnergy", f"{int(max(lc))}")
+
         # how many of the 12 (4 systems x 3 baselines) the control variate dominates
         ndom = 0
         for sysname in SYS:

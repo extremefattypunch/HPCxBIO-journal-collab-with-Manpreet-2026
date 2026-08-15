@@ -1,7 +1,7 @@
 {
-  "frozen": true,
-  "git_commit": "e41bbc2d562b3b1303b58717908e631b7bf4160a",
-  "git_dirty": false,
+  "frozen": false,
+  "git_commit": "d89de873dc1b7295e222dfc0627d0fb3d1a34044",
+  "git_dirty": true,
   "n_bootstrap_resamples": 10000,
   "seeds": {
     "schema_version": 1,
@@ -227,31 +227,31 @@
     },
     "06_screening_disjoint_test_1200K.jsonl": {
       "records": 210,
-      "sha256": "50a9b357417be03e3dab1bc9d29c666b3a54b2503176c3d570d9cbc51aab056a"
+      "sha256": "469b6eca8a74c54a761f94ec1f08d35666b21e1f4e0bcd33b130787e3ee729eb"
     },
     "06_screening_rmd17-disjoint_aspirin.jsonl": {
       "records": 210,
-      "sha256": "4b0610e9fdf342af54bb2b538e0dd87e493e3e19fa7824abfec13207db26a3fa"
+      "sha256": "524774144004956cceed9b66a2506866cc425e72847a80624ad647ec64153943"
     },
     "06_screening_rmd17-disjoint_azobenzene.jsonl": {
       "records": 210,
-      "sha256": "db141c284a08de316eb5d4cd4c7776192de111e82aee2b6fd422e7c28e532d4f"
+      "sha256": "169b472fe273d7c96557eb63236fec2f8f7c6a8e57cd69fd8527655442d6b25f"
     },
     "06_screening_rmd17-disjoint_ethanol.jsonl": {
       "records": 210,
-      "sha256": "984a6d2bd2f91502a76762e254fe07c15da343085e1f0f5d224af3fa632631eb"
+      "sha256": "c1dd6e0ed1bfacac083b806f3e8c9e99c4ab4588e7360016e7cb71f1f0ad7d07"
     },
     "07_gate_baselines_global.jsonl": {
       "records": 16,
-      "sha256": "fa67c6e0fdc484cbd2299576b67b8779cbc644c6dde4e2f75e6fa930c30f5eca"
+      "sha256": "34e1d99b72a81db65198b3bb840573997bff9347c6de3da65bff0021f473bdcd"
     },
     "07_gate_baselines_maxatom.jsonl": {
       "records": 16,
-      "sha256": "8b937a74d0eb476b13bbb6a03a7ae2401049e18ee577b4d7bbd13d9eec9d7ce5"
+      "sha256": "5897a685c1348053e55a7561bebd06f72f7d6ceca391ac0ce497ef10ef9bcc26"
     },
     "07_gate_baselines_maxcomp.jsonl": {
       "records": 16,
-      "sha256": "612001b8b61b77703fa0634f93c710d1c9e766c9f0d88934f759734bc8d0fd8b"
+      "sha256": "b632256307c7800f135dc5aefe0d4ca69fd22114bf3795dc342feb822937aca5"
     },
     "08_profile.jsonl": {
       "records": 4,
@@ -278,6 +278,8 @@
       "sha256": "7219e21f3e457cc546ab737d4ce85a3a338f65a41f017112473b4d5d4abd699b"
     }
   },
-  "n_macros": 229,
-  "audit_problems": []
+  "n_macros": 245,
+  "audit_problems": [
+    "working tree is dirty -- commit before freezing"
+  ]
 }

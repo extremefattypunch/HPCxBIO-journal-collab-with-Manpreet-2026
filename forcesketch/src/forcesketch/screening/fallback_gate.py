@@ -109,6 +109,7 @@ def evaluate_gate(
     cost_sketch_lanes: int,
     cost_exact_lanes: int,
     cost_model: LaneCostModel | None = None,
+    dirs_done: int | None = None,
 ) -> dict:
     """Every spec SS34 metric on a held-out split.
 
@@ -130,11 +131,18 @@ def evaluate_gate(
     frac_skipped = float(skip.float().mean())
 
     n_exact_run = int((~skip).sum())
-    lane_gate = cost_sketch_lanes * n + cost_exact_lanes * n_exact_run
+    # On fallback, a gate that already evaluated `dirs_done` independent centered
+    # directions completes the exact basis with (M-1) - dirs_done further reverse
+    # passes rather than a fresh M. Pass it, or leave it None for the conservative
+    # full-recompute accounting. Crediting this reuse to one method and not its
+    # baselines would manufacture an advantage, so callers must apply it uniformly.
+    lanes_complete = (cost_exact_lanes if dirs_done is None
+                      else (cost_exact_lanes - 1) - dirs_done)
+    lane_gate = cost_sketch_lanes * n + lanes_complete * n_exact_run
     lane_exact = cost_exact_lanes * n
 
     cm = cost_model or MEASURED_COST
-    ms_gate = cm(cost_sketch_lanes) * n + cm(cost_exact_lanes) * n_exact_run
+    ms_gate = cm(cost_sketch_lanes) * n + cm(lanes_complete) * n_exact_run
     ms_exact = cm(cost_exact_lanes) * n
 
     return {
@@ -151,6 +159,7 @@ def evaluate_gate(
         "n_false_negatives": fn,
         "frac_exact_skipped": frac_skipped,
         "precision": float(tp / max(int((~skip).sum()), 1)),
+        "lanes_complete": lanes_complete,
         "screening_lane_cost": lane_gate,
         "exact_lane_cost": lane_exact,
         "screening_speedup": float(ms_exact / max(ms_gate, 1e-9)),

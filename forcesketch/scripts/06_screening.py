@@ -87,8 +87,11 @@ def main() -> int:
                 s_hat = sketch_global_score(F, M, method, K, seed,
                                             r0=r0, Q=Q.get(r0))
                 gc = calibrate(S_ex[cal_i], s_hat[cal_i], alpha=alpha, tau=tau)
+                # K independent centered directions are already in hand, so the
+                # fallback completes the basis with M-1-K more, not a fresh M.
                 m = evaluate_gate(gc, S_ex[test_i], s_hat[test_i],
-                                  cost_sketch_lanes=K + 1, cost_exact_lanes=M)
+                                  cost_sketch_lanes=K + 1, cost_exact_lanes=M,
+                                  dirs_done=K)
                 m.update({
                     "experiment_id": "06_screening", "git_commit": sha, "git_dirty": dirty,
                     "dataset": "3bpa", "split": args.split, "variant": args.variant,

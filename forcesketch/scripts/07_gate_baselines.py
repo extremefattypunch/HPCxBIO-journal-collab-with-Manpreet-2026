@@ -124,16 +124,30 @@ def conformal_c(s_exact: torch.Tensor, s_hat: torch.Tensor, alpha: float,
     return float(r[k - 1])
 
 
-def gate_metrics(c_alpha, s_exact, s_hat, tau, *, lanes_gate, lanes_exact,
-                 lane_ms, reuse_r0: int = 0, M: int = 8):
+def gate_metrics(c_alpha, s_exact, s_hat, tau, *, lanes_gate, dirs_done,
+                 lanes_exact, lane_ms, M: int = 8):
+    """Metrics on the test split, with fallback cost accounted UNIFORMLY.
+
+    Every gate pays the mean-force lane regardless, because MD needs the force
+    whether or not uncertainty is computed. On fallback, a gate that has already
+    evaluated `dirs_done` linearly independent directions inside the centered
+    subspace needs only r - dirs_done further reverse passes to complete the exact
+    basis: the existing g_j are reused, and an orthonormal frame spanning them is
+    a linear recombination of vectors already in hand, not new reverse passes.
+
+    An earlier version credited this reuse to the control variate ALONE and
+    charged every baseline a fresh M-lane recompute. That is precisely the kind of
+    asymmetry this paper objects to elsewhere, and it inflated the control
+    variate's apparent margin -- under fair accounting the baselines are no longer
+    net slowdowns, and the control variate's advantage narrows to what its
+    decision quality actually earns.
+    """
     skip = c_alpha * s_hat < tau
     high = s_exact >= tau
     n, nh = s_exact.numel(), int(high.sum())
     tp = int((high & ~skip).sum())
     n_run = int((~skip).sum())
-    # On fallback the gate has already paid the mean lane and r0 exact directions,
-    # so completion needs only M-1-r0 further lanes, not a fresh M.
-    lanes_complete = (M - 1 - reuse_r0) if reuse_r0 else lanes_exact
+    lanes_complete = (M - 1) - dirs_done
     ms_gate = lane_ms(lanes_gate) * n + lane_ms(lanes_complete) * n_run
     ms_exact = lane_ms(lanes_exact) * n
     return {
@@ -142,6 +156,7 @@ def gate_metrics(c_alpha, s_exact, s_hat, tau, *, lanes_gate, lanes_exact,
         "frac_exact_skipped": float(skip.float().mean()),
         "screening_speedup": ms_exact / max(ms_gate, 1e-9),
         "n": n, "n_high_uq": nh, "c_alpha": c_alpha,
+        "test_prevalence": nh / max(n, 1), "lanes_complete": lanes_complete,
     }
 
 
@@ -196,13 +211,16 @@ def main() -> int:
         tau = float(torch.quantile(u_ex[design], 1.0 - args.target_p))
         Q = leading_head_directions(F[design], args.r0)          # design split ONLY
 
+        # (uncertainty lanes K, independent centered directions obtained, estimator).
+        # The energy gate spends NO reverse pass on uncertainty -- head energies come
+        # free from the forward -- but still pays the mean-force lane, as all do.
         gates = {
-            "energy (free)": (0, lambda sd: est_energy(E)),
-            f"head-exact-mean K=4": (4, lambda sd: est_head_exact_mean(F, M, 4, sd)),
-            f"haar K=4": (4, lambda sd: est_haar(F, M, 4, sd)),
-            f"control-variate K=4": (4, lambda sd: est_cv(F, M, 4, sd, Q, args.r0)),
+            "energy (free)": (0, 0, lambda sd: est_energy(E)),
+            "head-exact-mean K=4": (4, 4, lambda sd: est_head_exact_mean(F, M, 4, sd)),
+            "haar K=4": (4, 4, lambda sd: est_haar(F, M, 4, sd)),
+            "control-variate K=4": (4, 4, lambda sd: est_cv(F, M, 4, sd, Q, args.r0)),
         }
-        for gname, (K, fn) in gates.items():
+        for gname, (K, dirs_done, fn) in gates.items():
             seeds = SEEDS if K else SEEDS[:1]      # energy gate is deterministic
             # Precompute the score for every seed, then bootstrap the SEED-AVERAGED
             # statistic over structures -- the same convention as analysis/bootstrap.py.
@@ -217,29 +235,29 @@ def main() -> int:
 
             def seed_avg(idx_local, field):
                 vals = [gate_metrics(ca, u_ex[test][idx_local], sh[test][idx_local], tau,
-                                     lanes_gate=K + 1 if K else 0, lanes_exact=M,
-                                     lane_ms=lane_ms,
-                                     reuse_r0=args.r0 if "control" in gname else 0,
-                                     M=M)[field]
+                                     lanes_gate=K + 1, dirs_done=dirs_done,
+                                     lanes_exact=M, lane_ms=lane_ms, M=M)[field]
                         for sh, ca in zip(s_hats, c_alphas)]
                 return float(np.mean(vals))
 
             full = torch.arange(len(test))
             mean = {f: seed_avg(full, f) for f in
                     ("high_uq_recall", "false_negative_rate", "frac_exact_skipped",
-                     "screening_speedup")}
+                     "screening_speedup", "test_prevalence", "lanes_complete")}
             rec_lo, rec_hi = boot_ci(lambda i: seed_avg(i, "high_uq_recall"),
                                      len(test), args.n_boot, cfg["bootstrap_seed"])
             skip_lo, skip_hi = boot_ci(lambda i: seed_avg(i, "frac_exact_skipped"),
                                        len(test), args.n_boot, cfg["bootstrap_seed"])
-            print(f"{name:<12}{gname:<22}{(K+1 if K else 0):>6}"
+            print(f"{name:<12}{gname:<22}{K + 1:>6}"
                   f"  {mean['frac_exact_skipped']:.3f} [{skip_lo:.3f},{skip_hi:.3f}]"
                   f"  {mean['high_uq_recall']:.3f} [{rec_lo:.3f},{rec_hi:.3f}]"
                   f"{mean['screening_speedup']:>9.2f}x")
             records.append({"experiment_id": "07_gate_baselines", "git_commit": sha,
                             "git_dirty": dirty, "system": name, "split": tag,
                             "gate": gname, "score": args.score, "K": K,
-                            "total_lanes": (K + 1 if K else 0), "alpha": args.alpha,
+                            "total_lanes": K + 1, "uq_lanes": K, "alpha": args.alpha,
+                            "n_design": len(design), "n_cal": len(calib),
+                            "n_test": len(test), "batch_size_for_cost": 16,
                             "r0": args.r0 if "control" in gname else 0,
                             "n_seeds": len(seeds), "tau": tau,
                             "recall_ci_lo": rec_lo, "recall_ci_hi": rec_hi,
