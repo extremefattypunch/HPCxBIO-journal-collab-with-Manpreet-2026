@@ -138,7 +138,8 @@ rMD17 committee on ethanol (9 atoms), aspirin (21) and azobenzene (24), 1000 hel
 All estimator evaluation is in float64. This is not fastidiousness: with mean force over disagreement
 $\rho\approx36$ on this committee, an float32 ``exact'' reference carries $\sim\!3\times10^{-5}$
 relative error, larger than the $10^{-5}$ tolerance at which we verify full-rank exactness.
-Ten random seeds are frozen before testing and none is discarded. Timing uses CUDA events with
+Ten random seeds are frozen before testing and none is discarded; all confidence
+intervals are paired bootstraps over structures with \fsNBoot{} resamples. Timing uses CUDA events with
 per-iteration measurement on an RTX 5070 Laptop GPU; the measured lane cost is
 $T(L)=\fsCostIntercept + \fsCostSlope\,L$\,ms.
 
@@ -151,7 +152,7 @@ computation. Haar is the best sketch at every budget --- top-5\% recall \fsHaarR
 $K=2,3,4$. Rank correlation is respectable (Spearman \fsHaarSpearmanKFour{}
 \fsHaarSpearmanKFourCI{} at $K{=}4$), but tail selection is not: no method approaches the 0.90
 recall that would justify substitution. All intervals are 95\% paired bootstrap over structures
-($10^3$ resamples), computed on the seed-averaged statistic; seed-to-seed standard deviations are
+(\fsNBoot{} resamples), computed on the seed-averaged statistic; seed-to-seed standard deviations are
 $0.03$--$0.06$ and are reported separately in the result records.
 
 Orthogonalizing the probes is the largest single lever in the method. The paired difference between

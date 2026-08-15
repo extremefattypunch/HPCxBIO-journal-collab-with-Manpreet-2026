@@ -165,6 +165,9 @@ def emit_macros(out: Path) -> dict:
     bs = RAW / "04_bootstrap_disjoint_test_1200K.jsonl"
     if bs.exists():
         recs = load_jsonl(bs)
+        nb = {int(r["top5_recall_n_boot"]) for r in recs
+              if r["experiment_id"] == "04_bootstrap_ci"}
+        put("fsNBoot", f"{sorted(nb)[0]:,}" if len(nb) == 1 else "MIXED")
         by = {(r["method"], r["K"], r["r0"], r.get("with_mean_lane", False)): r
               for r in recs if r["experiment_id"] == "04_bootstrap_ci"}
         for K in (2, 3, 4):
