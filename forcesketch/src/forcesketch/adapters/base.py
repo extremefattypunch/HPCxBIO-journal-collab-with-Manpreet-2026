@@ -149,7 +149,10 @@ class BaseMHCAdapter:
         pos = self.positions(batch)
         seeds = torch.eye(M, dtype=pos.dtype, device=pos.device)
         seeds = seeds.unsqueeze(1).expand(M, B, M).contiguous()
-        return self.vjp_for_seeds(batch, seeds)
+        # batched=False on purpose: this is the reference/debug path, and
+        # is_grads_batched is unreliable on MACE + e3nn 0.4.4 (see
+        # adapters/mace_mhc.configure_e3nn_for_batched_vjp).
+        return self.vjp_for_seeds(batch, seeds, batched=False)
 
     def assert_heads_nondegenerate(self, batch, *, atol: float = 0.0) -> None:
         """Guard against the one failure that is fatal AND invisible: a committee
