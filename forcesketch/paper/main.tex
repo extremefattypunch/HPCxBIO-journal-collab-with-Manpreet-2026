@@ -23,8 +23,8 @@
 % analysis/tables.py. Do not write a literal result into this file.
 \input{macros}
 
-\title{ForceSketch: Randomized Head-Space VJPs for Screening\\
-Force Uncertainty in Multi-Head Molecular Potentials}
+\title{ForceSketch: Randomized Head-Space VJPs\\
+for Screening Force Uncertainty in Multi-Head Molecular Potentials}
 
 \author{%
   Anonymous Author(s) \\
@@ -179,6 +179,7 @@ against 300\,K-trained behaviour is precisely such a shift, and we report the ob
 there rather than assume it.
 
 \section{Experimental setup}
+\label{sec:setup}
 We use the pretrained eight-head MACE~\citep{mace} committees released with~\citet{beck2025mhc}: two message-passing
 layers, 32 channels, $\ell_{\max}=1$, $r_{\mathrm{cut}}=6$\,\AA. We evaluate the three
 head-distribution variants (\emph{disjoint}, \emph{overlapping}, \emph{same}) on 3BPA~\citep{botnet3bpa} at 1200\,K
@@ -249,8 +250,11 @@ the whole pipeline. This is a real obstacle to \emph{replacement}, and, as
 Section~\ref{sec:screening} shows, not one to screening: the bias is monotone in the estimator's
 noise level, so a scale-calibrated gate absorbs it into $c_\alpha$.
 
-Orthogonalizing the probes is the largest single lever in the method. The paired difference between
-Haar and Gaussian at $K{=}3$, evaluated on identical structure resamples, is
+Orthogonalizing the probes is the largest single lever in the method. The estimator comparisons that
+follow are on the global statistic, where the paired-bootstrap machinery of Section~\ref{sec:setup}
+was frozen; the ordering they establish is a property of the estimators, not of the acquisition rule.
+The paired difference between Haar and Gaussian at $K{=}3$, evaluated on identical structure
+resamples, is
 $\fsDeltaOrtho$ \fsDeltaOrthoCI{} in top-5\% recall, and is significant on all four systems. The
 low-rank control variate adds a further $\fsDeltaCV$ \fsDeltaCVCI{} over Haar at $K{=}4$, reaching
 \fsCVRecallKFour{} \fsCVRecallKFourCI{} --- still short of 0.90.

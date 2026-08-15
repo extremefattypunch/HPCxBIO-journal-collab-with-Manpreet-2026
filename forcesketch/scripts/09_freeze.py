@@ -102,14 +102,16 @@ def main() -> int:
     # is no rebuttal phase -- so it is checked mechanically rather than by eye,
     # and checked in the RENDERED PDF as well as the source, because the author
     # block is set by a style file the source never spells out.
-    IDENTIFYING = ["Ian Poon", "ian_poon", "@fas.harvard", "Harvard",
-                   "Cellular and Molecular Biology", "ianpoon"]
+    _anon = yaml.safe_load(Path("configs/anonymity.yaml").read_text())
+    IDENTIFYING = [re.compile(p_, re.I) for p_ in _anon["needles"]]
+    _ALLOWED = re.compile("|".join(_anon["allowed"]), re.I)
     paper = Path("paper")
     for f in sorted(paper.glob("*.tex")):
         text = f.read_text(errors="ignore")
         for needle in IDENTIFYING:
-            if needle.lower() in text.lower():
-                problems.append(f"ANONYMITY: {f.name} contains {needle!r}")
+            m = needle.search(text)
+            if m and not _ALLOWED.search(m.group(0)):
+                problems.append(f"ANONYMITY: {f.name} contains {m.group(0)!r}")
     for opt in ("final", "preprint"):
         if f"[{opt}]{{neurips_2026}}" in (paper / "main.tex").read_text():
             problems.append(f"ANONYMITY: neurips_2026 loaded with '{opt}' -- de-anonymises")
@@ -122,8 +124,9 @@ def main() -> int:
             rendered = subprocess.run(["pdftotext", str(pdf), "-"], capture_output=True,
                                       text=True, check=True).stdout
             for needle in IDENTIFYING:
-                if needle.lower() in rendered.lower():
-                    problems.append(f"ANONYMITY: rendered PDF contains {needle!r}")
+                m = needle.search(rendered)
+                if m and not _ALLOWED.search(m.group(0)):
+                    problems.append(f"ANONYMITY: rendered PDF contains {m.group(0)!r}")
             if "Anonymous Author" not in rendered:
                 problems.append("ANONYMITY: rendered PDF lacks the anonymous author block")
             # identifying links are called out explicitly by the call for papers
