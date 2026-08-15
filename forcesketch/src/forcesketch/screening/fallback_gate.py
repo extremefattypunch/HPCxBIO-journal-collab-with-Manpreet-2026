@@ -1,0 +1,106 @@
+r"""Conservative exact-fallback screening gate (spec SS33, SS34; hypothesis H5).
+
+The point of this module is that ForceSketch does not have to REPLACE exact force
+UQ to be useful. It only has to decide, cheaply and conservatively, which
+structures cannot possibly be above the exact high-uncertainty threshold -- those
+can skip the exact computation entirely, and the rest fall back to it.
+
+Construction (spec SS33). On a calibration split compute the ratio
+
+    r_i = S(x_i) / (S_hat(x_i) + eps)
+
+take a conservative upper quantile c_alpha, and define the optimistic bound
+
+    U(x) = c_alpha * S_hat(x)
+
+Then skip exact evaluation whenever U(x) < tau. Because c_alpha upper-bounds the
+ratio for (1 - alpha) of calibration structures, U over-estimates S for those, so
+`U(x) < tau` implies `S(x) < tau` at the calibrated confidence.
+
+The calibration quantile is fitted ONLY on the calibration split, and the
+threshold tau is defined from the calibration split too. The test split is
+touched once, at the end.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import torch
+from torch import Tensor
+
+
+@dataclass(frozen=True, slots=True)
+class GateCalibration:
+    c_alpha: float
+    alpha: float
+    tau: float
+    eps: float
+
+    def bound(self, s_hat: Tensor) -> Tensor:
+        return self.c_alpha * s_hat
+
+    def skip_mask(self, s_hat: Tensor) -> Tensor:
+        """True where exact evaluation can be skipped."""
+        return self.bound(s_hat) < self.tau
+
+
+def calibrate(
+    s_exact: Tensor, s_hat: Tensor, *, alpha: float, tau: float, eps: float = 1e-30
+) -> GateCalibration:
+    """Fit c_alpha on the CALIBRATION split only."""
+    ratio = s_exact / (s_hat + eps)
+    c = float(torch.quantile(ratio, 1.0 - alpha))
+    return GateCalibration(c_alpha=c, alpha=alpha, tau=tau, eps=eps)
+
+
+def evaluate_gate(
+    cal: GateCalibration,
+    s_exact: Tensor,
+    s_hat: Tensor,
+    *,
+    cost_sketch_lanes: int,
+    cost_exact_lanes: int,
+) -> dict:
+    """Every spec SS34 metric on a held-out split.
+
+    `screening_speedup` uses lane counts as the cost model: the gate always pays
+    the sketch, and additionally pays the exact cost on the structures it does not
+    skip. That is the honest accounting -- a gate that skips nothing is SLOWER than
+    computing exact directly, and this formula shows it.
+    """
+    skip = cal.skip_mask(s_hat)
+    high = s_exact >= cal.tau
+
+    tp = int((high & ~skip).sum())      # high-UQ correctly sent to exact
+    fn = int((high & skip).sum())       # high-UQ wrongly skipped -- the dangerous case
+    n = s_exact.numel()
+    frac_skipped = float(skip.float().mean())
+
+    total_gate = cost_sketch_lanes * n + cost_exact_lanes * int((~skip).sum())
+    total_exact = cost_exact_lanes * n
+
+    return {
+        "alpha": cal.alpha,
+        "c_alpha": cal.c_alpha,
+        "tau": cal.tau,
+        "n": n,
+        "n_high_uq": int(high.sum()),
+        "high_uq_recall": float(tp / max(int(high.sum()), 1)),
+        "false_negative_rate": float(fn / max(int(high.sum()), 1)),
+        "n_false_negatives": fn,
+        "frac_exact_skipped": frac_skipped,
+        "precision": float(tp / max(int((~skip).sum()), 1)),
+        "screening_lane_cost": total_gate,
+        "exact_lane_cost": total_exact,
+        "screening_speedup": float(total_exact / max(total_gate, 1)),
+    }
+
+
+def split_indices(n: int, *, seed: int, fracs=(0.2, 0.2, 0.6)) -> tuple[Tensor, Tensor, Tensor]:
+    """Spec SS33's 20% calibration / 20% validation / 60% test split."""
+    g = torch.Generator().manual_seed(seed)
+    perm = torch.randperm(n, generator=g)
+    n_cal = int(round(fracs[0] * n))
+    n_val = int(round(fracs[1] * n))
+    return perm[:n_cal], perm[n_cal:n_cal + n_val], perm[n_cal + n_val:]
