@@ -33,7 +33,8 @@ for exact force UQ. But a
 conservatively calibrated gate, built on a low-rank head-space control variate, skips
 \fsGateSkipThreeBPA{} of exact evaluations while retaining \fsGateRecallThreeBPA{} of
 high-uncertainty configurations on 3BPA, and generalizes to all three rMD17 molecules. Reducing
-reverse-mode directions is worth $\fsCeilingKThreeBOne\times$ in incremental UQ latency.
+reverse-mode directions is worth $\fsIncrKThreeBOne\times$ in incremental UQ latency and
+$\fsTotalKThreeBOne\times$ in total force-plus-UQ latency.
 \end{abstract}
 
 \section{Introduction}
@@ -177,14 +178,22 @@ but it cannot produce the mean force molecular dynamics requires. Reporting a si
 have settled this comparison by definition rather than by measurement.
 
 \subsection{Does reducing directions reduce GPU time?}
-Yes, and remarkably uniformly. The measured ceiling on incremental UQ speedup,
-$T(L{=}8)/T(L{=}K{+}1)$, is $\fsCeilingKThreeBOne\times$ at $K{=}3$ and $\fsCeilingKTwoBOne\times$
-at $K{=}2$. Sweeping batch sizes $B\in\{1,4,16,64\}$ and three molecules spanning 9 to 27 atoms,
-that ceiling stays within $1.77$--$1.87\times$ at $K{=}3$ and $2.17$--$2.39\times$ at $K{=}2$. This
-answers spec-level question of what the saving actually depends on: \emph{the reverse-lane count},
-not the atom count and not the batch size. Real MACE is compute-bound even at $B{=}1$ (a single
-lane costs $\sim\!21$\,ms for 27 atoms), so the launch-bound regime in which extra cotangent lanes
-would ride along free never occurs on this hardware. We report an important caveat in Section~\ref{sec:limitations}: our exact baseline
+Yes, and remarkably uniformly. We report the two speedups separately because they answer different
+questions. The \emph{incremental UQ} speedup is
+$[T(L{=}M)-T(L{=}1)]\,/\,[T(L{=}1{+}K)-T(L{=}1)]$, i.e.\ the cost of uncertainty alone once the
+mean force is paid for; it is $\fsIncrKThreeBOne\times$ at $K{=}3$ and $\fsIncrKTwoBOne\times$ at
+$K{=}2$. The \emph{total workflow} speedup $T(L{=}M)/T(L{=}1{+}K)$ includes the mean-force lane and
+is necessarily smaller: $\fsTotalKThreeBOne\times$ and $\fsTotalKTwoBOne\times$.
+
+Sweeping $B\in\{1,4,16,64\}$ and three molecules spanning 9 to 27 atoms, the incremental figure
+stays within $1.82$--$2.51\times$ at $K{=}3$ and $3.11$--$4.03\times$ at $K{=}2$, and the total
+within $1.77$--$1.87\times$ and $2.17$--$2.39\times$. What the saving tracks is therefore
+\emph{the reverse-lane count} --- not the atom count and not the batch size. Real MACE is
+compute-bound even at $B{=}1$ (one lane costs $\sim\!21$\,ms for 27 atoms), so the launch-bound
+regime in which extra cotangent lanes would ride along free never occurs on this hardware.
+A profile at $B{=}16$ confirms the mechanism: the shared forward is only $9.4$\,ms of a
+$100.6$\,ms exact step, so the reverse pass dominates by roughly an order of magnitude and each
+removed lane removes $\sim\!12$\,ms of it. We report an important caveat in Section~\ref{sec:limitations}: our exact baseline
 is a serial loop, because batched reverse-mode is unusable on this software stack.
 
 \subsection{Can approximate screening avoid exact computation?}

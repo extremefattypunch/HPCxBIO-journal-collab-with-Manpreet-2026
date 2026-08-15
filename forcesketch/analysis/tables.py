@@ -88,6 +88,30 @@ def table1_primary(system_tag: str, cost=None) -> str:
     return "\n".join(lines)
 
 
+def table2_scaling() -> str:
+    """Spec SS54 Table 2: system, atoms, batch size, exact vs ForceSketch latency.
+
+    Answers what the saving actually tracks. Columns are measured medians, not a
+    fitted model, so the fit in `fit_cost_model` can be checked against them.
+    """
+    import glob
+    lines = ["| system | atoms/struct | B | total atoms | exact UQ ms (L=8) "
+             "| FS K=3 ms (L=4) | incr. speedup | K=2 speedup |",
+             "|---|---:|---:|---:|---:|---:|---:|---:|"]
+    for f in sorted(glob.glob(str(RAW / "lane_scaling_*.jsonl"))):
+        recs = load_jsonl(Path(f))
+        by = {(r["batch_size"], r["lanes"]): r for r in recs}
+        a_per = recs[0]["num_atoms"] // recs[0]["batch_size"]
+        for B in sorted({r["batch_size"] for r in recs}):
+            if (B, 8) not in by:
+                continue
+            t1, t3, t4, t8 = (by[(B, l)]["median_ms"] for l in (1, 3, 4, 8))
+            lines.append(
+                f"| {recs[0]['system']} | {a_per} | {B} | {by[(B,8)]['num_atoms']} "
+                f"| {t8:.2f} | {t4:.2f} | {(t8-t1)/(t4-t1):.2f}x | {(t8-t1)/(t3-t1):.2f}x |")
+    return "\n".join(lines)
+
+
 def table3_screening(system_tags: list[str]) -> str:
     """Spec SS54 Table 3, across systems."""
     lines = ["| system | method | K | alpha | exact skipped | high-UQ recall "
@@ -140,10 +164,18 @@ def emit_macros(out: Path) -> dict:
     ls = RAW / "lane_scaling_disjoint.jsonl"
     if ls.exists():
         recs = {(r["batch_size"], r["lanes"]): r["median_ms"] for r in load_jsonl(ls)}
+        # Spec SS45 defines these differently and forbids conflating them:
+        #   incremental UQ speedup = [T(L=8) - T(L=1)] / [T(L=1+K) - T(L=1)]
+        #   total workflow speedup =  T(L=8) / T(L=1+K)
+        # The raw ratio INCLUDES the mean-force lane, so it is the total, not the
+        # incremental, figure.
         for B in (1, 64):
             if (B, 8) in recs:
-                put(f"fsCeilingKThreeB{WORD[B]}", recs[(B, 8)] / recs[(B, 4)], "{:.2f}")
-                put(f"fsCeilingKTwoB{WORD[B]}", recs[(B, 8)] / recs[(B, 3)], "{:.2f}")
+                t1, t3, t4, t8 = (recs[(B, l)] for l in (1, 3, 4, 8))
+                put(f"fsTotalKThreeB{WORD[B]}", t8 / t4, "{:.2f}")
+                put(f"fsTotalKTwoB{WORD[B]}", t8 / t3, "{:.2f}")
+                put(f"fsIncrKThreeB{WORD[B]}", (t8 - t1) / (t4 - t1), "{:.2f}")
+                put(f"fsIncrKTwoB{WORD[B]}", (t8 - t1) / (t3 - t1), "{:.2f}")
 
     # screening headline: control variate r0=2, K=4, alpha=0.05, per system
     for tag, short in [("disjoint_test_1200K", "ThreeBPA"), ("rmd17-disjoint_ethanol", "Ethanol"),

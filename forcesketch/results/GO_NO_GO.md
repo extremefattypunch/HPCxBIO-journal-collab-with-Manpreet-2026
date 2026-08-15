@@ -20,7 +20,7 @@ recall requirement fails, and it fails by a wide margin rather than marginally.
 | mathematical tests passing | **pass** | 41/41, incl. §20, §21, §22, §23, §24 |
 | one complete accuracy–latency Pareto curve | **pass** | `paper/figures/fig2_pareto_*.png` |
 | top-5% recall ≥ 0.90 for at least one useful K | **FAIL** | best is 0.743 (control variate r0=2, K=4, 3BPA); 0.52–0.56 on rMD17 |
-| incremental UQ speedup ≥ 1.5× | **pass** | 1.83–1.87× at K=3; 2.31–2.39× at K=2 |
+| incremental UQ speedup ≥ 1.5× | **pass** | **2.19–2.51×** at K=3; **3.11–4.03×** at K=2 (total workflow: 1.77–1.87× and 2.17–2.39×) |
 | sketching competitive with head subsampling | **pass, conditional** | wins at equal total lanes *when an exact mean force is required* |
 
 **§48 success criteria** (K≤4 **and** recall ≥0.90 **and** speedup ≥1.5× on ≥2 systems):
@@ -31,8 +31,8 @@ against the 0.85 threshold — a narrow escape), but **triggers on all three rMD
 molecules**. Escalation rungs 3 (calibrated exact fallback) and 4 (low-rank control
 variate) were both implemented in response, per the spec's ordering.
 
-**§50 systems kill gate:** cleared comfortably and uniformly (1.83–1.87× at K=3 for
-every batch size tested).
+**§50 systems kill gate** (threshold 1.2× on incremental UQ): cleared comfortably and
+uniformly — 2.19–2.51× at K=3 across every system and batch size tested.
 
 ---
 
@@ -52,9 +52,10 @@ the calibration split only:
 H5's targets (skip ≥50%, retain ≥95%) are met on all four with margin. This is
 precisely the outcome §66 prescribes a framing for: **screening, not replacement.**
 
-Speedups use the *measured* cost model T(L) = 9.50 + 11.93·L ms, not lane counts.
-Lane count is not lane cost — the forward pass is paid once regardless of L — and
-the lane-count model overstates the gate by ~0.06×. Both are recorded.
+Screening speedups use the *measured* cost model T(L) = 10.38 + 11.78·L ms (least-squares
+fit over the full lane scan), not lane counts. Lane count is not lane cost — the forward
+pass is paid once regardless of L — and the lane-count model overstates the gate by
+~0.06×. Both are recorded.
 
 ---
 
@@ -72,13 +73,15 @@ exact mean force is required: Haar K=3 (0.529) vs head-subsample K=3+mean (0.477
 scores 0.588. Both framings are in `results/raw/03_sketch_fidelity_*.jsonl`; the
 distinction matters because MD needs the exact mean force.
 
-**Q4 — incremental UQ speedup vs exact?** T(L=8)/T(L=4) = 1.83–1.87× (K=3) and
-T(L=8)/T(L=3) = 2.31–2.39× (K=2), flat across B ∈ {1,4,16,64}. Measured against the
-serial exact baseline.
+**Q4 — incremental UQ speedup vs exact?** §45 defines this as
+[T(L=8)−T(L=1)]/[T(L=1+K)−T(L=1)], i.e. uncertainty cost once the mean force is paid:
+**2.19–2.51× at K=3** and **3.11–4.03× at K=2**, across four systems and
+B ∈ {1,4,16,64}. Measured against the serial exact baseline.
 
-**Q5 — total mean-force + UQ speedup?** The same ratios: the mean lane is inside the
-L count, so total and incremental coincide under this cost model. Reported separately
-in the records to avoid conflation (§45).
+**Q5 — total mean-force + UQ speedup?** T(L=8)/T(L=1+K), which includes the
+mean-force lane and is necessarily smaller: **1.77–1.87× at K=3** and
+**2.17–2.39× at K=2**. An earlier draft of this document quoted the total figure
+under the incremental label; §45 forbids conflating them and they are now separate.
 
 **Q6 — where does the benefit disappear?** It does not, over B = 1…64 — the ratio is
 flat because real MACE is compute-bound even at B=1 (21 ms for a single lane). It
@@ -88,11 +91,13 @@ flat because real MACE is compute-bound even at B=1 (21 ms for a single lane). I
 
 **Q8 — high-uncertainty recall retained?** 97.1–98.8%.
 
-**Q9 — does Triton materially affect total runtime?** Not measured on the real model;
-on a toy the full §41 postprocessing chain was a flat ~0.10 ms, i.e. 4–6% of runtime,
-below §43's 10% threshold. Real MACE's heavier VJP (21–105 ms) pushes that fraction
-far lower still, so the answer is almost certainly **no** — which §42 explicitly
-permits reporting.
+**Q9 — does Triton materially affect total runtime?** **No, measured.** On the real
+committee at B=16, the full §41 postprocessing chain costs 0.16 ms against a 46.2 ms
+ForceSketch(K=3) step — **0.3% of runtime**, thirty times below §43's 10% threshold.
+The profile also shows why: the shared forward is 9.4 ms of a 100.6 ms exact step, so
+the reverse pass dominates and postprocessing is negligible against it. §43's rule
+therefore says do not implement the Triton kernel, and §42 explicitly permits
+reporting that.
 
 ---
 
@@ -118,9 +123,17 @@ permits reporting.
    simply estimator variance at small K.
 
 4. **Timing is single-GPU, single-run.** §44's full protocol (≥500 iterations,
-   IQR, counterbalanced ordering, subprocess isolation) is implemented for the lane
-   scan only. §26's full six-implementation comparison, §31's batch sweep and §46's
-   profiling are not yet done.
+   counterbalanced ordering, subprocess isolation) is implemented for the lane scan
+   only; medians and IQRs are recorded throughout. §46's phase profiling is done
+   (Q9 above); §26's six-implementation comparison is moot for the batched and
+   `torch.func` variants and unmeasured for the compiled-forward one; §31's batch
+   sweep is covered by the lane scan at B in {1,4,16,64}.
+
+6. **NVTX attribution is partial.** e3nn ships 18 compiled `ScriptModule`s and
+   TorchScript rejects forward hooks on them, so per-module ranges stop at the
+   tensor-product boundary. Their time is attributed to the enclosing range rather
+   than lost, but kernel-level attribution *inside* the tensor products is not
+   available through this route.
 
 5. **rMD17 spans 9–24 atoms**, so molecule size is a weak axis; the size story rests
    on atoms-per-batch.
