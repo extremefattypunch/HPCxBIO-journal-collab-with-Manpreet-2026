@@ -1,0 +1,36 @@
+# Derived binary artifacts. These are regenerable from tracked code plus the
+# Zenodo/figshare/GitHub sources recorded in results/STAGE2_ENVIRONMENT.md, and
+# together they are ~384 MB -- too much to carry on a remote for something a
+# script rebuilds. The JSON/JSONL records ARE tracked (5.5 MB): they are the
+# evidence every documented number is checked against, and losing them would
+# break the provenance tests in tests/test_protocol_hygiene.py.
+#
+# Rebuild commands:
+#   results/processed/*.pt          experiments/j5_water_caches.py, j6_naive_caches.py
+#   results/records/*.pt            experiments/j6b_foundation_scan.py  (~57 min, 1 A100)
+#   results/perstructure/           experiments/j2a_oracle_panel.py
+forcesketchJournalReady/results/processed/**/*.pt
+forcesketchJournalReady/results/records/*.pt
+forcesketchJournalReady/results/records/*.pt.partial
+forcesketchJournalReady/results/perstructure/
+
+# Machine-specific symlinks into /n/holylabs; recreated by the Stage 2 bring-up.
+forcesketch/data
+forcesketch/models
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# LaTeX build intermediates (main.pdf IS tracked - it is the deliverable)
+forcesketchJournalReady/paper/*.aux
+forcesketchJournalReady/paper/*.log
+forcesketchJournalReady/paper/*.out
+forcesketchJournalReady/paper/*.bbl
+forcesketchJournalReady/paper/*.blg
+forcesketchJournalReady/paper/*.toc
+forcesketchJournalReady/paper/pass*.log
+forcesketchJournalReady/paper/p1.log
+forcesketchJournalReady/paper/p2.log
+forcesketchJournalReady/paper/bib.log
+forcesketchJournalReady/paper/c1.log
