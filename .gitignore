@@ -34,3 +34,7 @@ forcesketchJournalReady/paper/p1.log
 forcesketchJournalReady/paper/p2.log
 forcesketchJournalReady/paper/bib.log
 forcesketchJournalReady/paper/c1.log
+
+# Deposit archive, rebuilt by forcesketchJournalReady/tools/make_release.py from
+# tracked files only. Regenerable, so it is not itself tracked.
+forcesketchJournalReady/release/
