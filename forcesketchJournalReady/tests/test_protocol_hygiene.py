@@ -378,22 +378,67 @@ def test_registered_protocols_have_not_been_edited_since_registration(stem):
 def test_manuscript_only_uses_macros_that_exist():
     """No numeral in the paper may be typed by hand.
 
-    The rule is that every number in main.tex is a \\fs macro derived from a
-    record. This catches the failure mode where a macro is renamed or a number is
-    referenced before its derivation is added to tools/paper_numbers.py.
+    Every \\fs macro the manuscript uses must be defined somewhere, and every
+    macro that macros.tex defines must have a provenance entry. This catches a
+    macro renamed without updating the text, and a number referenced before its
+    derivation is added to tools/paper_numbers.py.
+
+    Two things this test used to get wrong.
+
+    It read only main.tex. Since the manuscript was split into body.tex plus thin
+    per-venue wrappers, main.tex holds almost no macros, so the check passed
+    vacuously while the actual prose went unexamined. It now reads body.tex, every
+    venue wrapper and the generated tables.
+
+    It also assumed every \\fs macro is a derived number from macros.tex. The
+    artifact locator in artifact.tex is a \\fs macro that is deliberately NOT
+    derived from a record -- it is a URL -- and hard-coding that assumption made a
+    legitimate addition look like a defect. Definitions are therefore collected
+    from macros.tex, artifact.tex and the file under test, while the
+    provenance requirement stays scoped to macros.tex, which is the file that
+    actually carries derived numbers.
     """
     import re
 
-    main = ROOT / "paper/main.tex"
-    macros = ROOT / "paper/macros.tex"
-    if not main.exists():
+    paper = ROOT / "paper"
+    macros = paper / "macros.tex"
+    if not (paper / "body.tex").exists() and not (paper / "main.tex").exists():
         pytest.skip("manuscript not started")
-    defined = set(re.findall(r"\\newcommand\{\\(fs\w+)\}", macros.read_text()))
-    used = set(re.findall(r"\\(fs[A-Za-z]+)", main.read_text()))
-    assert not (used - defined), f"main.tex uses undefined macros: {sorted(used - defined)}"
+
+    def newcommands(path):
+        return set(re.findall(r"\\(?:new|renew|provide)command\*?\{\\(fs\w+)\}",
+                              path.read_text())) if path.exists() else set()
+
+    from_macros = newcommands(macros)
+    shared = from_macros | newcommands(paper / "artifact.tex")
+
+    wrappers = sorted(paper.glob("main*.tex"))
+
+    # Each wrapper is checked against what IT defines. body.tex and the generated
+    # tables are \input by every wrapper, so they must work under all of them:
+    # they may only use macros the INTERSECTION of wrappers defines. That is what
+    # makes \fsArtifactLink legitimate -- every venue defines it, differently --
+    # while still failing if only one venue did.
+    common = set.intersection(*[newcommands(w) for w in wrappers]) if wrappers else set()
+
+    for f in wrappers:
+        used = set(re.findall(r"\\(fs[A-Za-z]+)", f.read_text()))
+        defined = shared | newcommands(f)
+        assert not (used - defined), \
+            f"{f.name} uses undefined macros: {sorted(used - defined)}"
+
+    for f in [paper / "body.tex"] + sorted((paper / "tables").glob("*.tex")):
+        if not f.exists():
+            continue
+        used = set(re.findall(r"\\(fs[A-Za-z]+)", f.read_text()))
+        defined = shared | common
+        assert not (used - defined), \
+            f"{f.name} uses macros not defined by every venue wrapper: " \
+            f"{sorted(used - defined)}"
+
     prov = json.loads((RECORDS / "macro_provenance.json").read_text())
-    assert defined <= set(prov), \
-        f"macros with no provenance entry: {sorted(defined - set(prov))}"
+    assert from_macros <= set(prov), \
+        f"macros with no provenance entry: {sorted(from_macros - set(prov))}"
 
 
 def test_manuscript_sources_are_present_and_self_consistent():

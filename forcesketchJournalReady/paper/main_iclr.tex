@@ -16,10 +16,19 @@
 \input{macros}
 
 \input{artifact}
-% ICLR is double-blind, so the DOI -- which carries the depositor's name and
-% ORCID on its landing page -- must NOT appear. The anonymised mirror is cited
-% instead, and the DOI is added for the camera-ready.
-\newcommand{\fsArtifactLink}{an anonymised mirror, \url{\fsArtifactAnon}}
+% ICLR is double-blind. The artifact IS public, but its URL contains the author's
+% GitHub handle, so citing it here would de-anonymise the submission. If an
+% anonymised mirror exists (\fsArtifactAnon non-empty) it is cited; otherwise the
+% statement says so plainly rather than omitting the question, which is what a
+% reviewer actually needs to know.
+\newcommand{\fsArtifactLink}{%
+  \ifx\fsArtifactAnon\empty
+    a public repository whose URL is withheld here because it identifies the
+    authors under double-blind review. It will be cited in the camera-ready, and
+    can be made available to reviewers through the program chairs on request%
+  \else
+    an anonymised mirror, \url{\fsArtifactAnon}%
+  \fi}
 
 \title{When is committee force uncertainty worth computing in MD?\\
 Decision quality, cheap gates, and the baselines that must be beaten}

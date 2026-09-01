@@ -4,19 +4,29 @@
 % tools/paper_numbers.py from experimental records and is overwritten on every
 % build, so a hand-edited locator would be silently destroyed.
 %
-% Both values below are placeholders until the deposit exists. The build scripts
-% grep the RENDERED pdf for "PLACEHOLDER" and refuse to finish while either is
-% still unfilled, because a dead or invented locator in an availability
+% The build scripts grep the RENDERED pdf for "PLACEHOLDER" and refuse to finish
+% while a locator is unfilled, because a dead locator in an availability
 % statement is worse than an absent one: it looks checkable and is not.
 %
-% TO FILL IN, once the Zenodo (or Figshare) deposit is created:
-%   \fsArtifactDoi   the CONCEPT doi, which always resolves to the latest
-%                    version, not the version-specific one
-%   \fsArtifactAnon  a double-blind-safe mirror for ICLR. Zenodo restricted
-%                    access or anonymous.4open.science both work; it must not
-%                    carry the author's name, ORCID or institution.
-\newcommand{\fsArtifactDoi}{PLACEHOLDER-ZENODO-CONCEPT-DOI}
-\newcommand{\fsArtifactAnon}{PLACEHOLDER-ANONYMISED-MIRROR-URL}
+% \fsArtifactLoc is named for what it is -- a locator -- rather than "Doi",
+% because a repository URL is what it currently holds. If the artifact is later
+% given a DOI (Zenodo can archive a GitHub release automatically), swap the value
+% and nothing else changes.
+\newcommand{\fsArtifactLoc}{\url{https://github.com/extremefattypunch/forcesketch}}
+
+% Double-blind-safe mirror for the ICLR build. Must not carry the author's name,
+% GitHub handle or institution -- which rules out the locator above, since the
+% handle is in the URL.
+%
+% Left EMPTY on purpose rather than placeholdered. anonymous.4open.science can
+% mirror the repository with identity stripped, but creating the mirror requires
+% granting that service OAuth access to the GitHub account, which is the author's
+% decision to make and not a build step. Until it exists, the ICLR build states
+% the position plainly instead of citing a link, which is honest and is accepted
+% practice at the venue.
+%
+% When the mirror is created, put its URL here and main_iclr.tex will cite it.
+\newcommand{\fsArtifactAnon}{}
 
 % Upstream inputs, which are NOT this work's artifact and must not be conflated
 % with it: the multi-head committee checkpoints and the 3BPA/water frames this
