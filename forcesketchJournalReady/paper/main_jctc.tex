@@ -53,15 +53,33 @@
 % submission-v1, marks the state the manuscript was built from.
 \newcommand{\fsArtifactLink}{\fsArtifactLoc}
 
-% Two affiliations, both genuine, and the order matters for the reason below.
-% The computational work was carried out on Harvard's FASRC cluster while the
-% author was an intern there, so Harvard must remain listed -- dropping it would
-% misattribute where the work was done. Imperial College London is the author's
-% home institution and is given as the corresponding affiliation. achemso marks
-% the \email-bearing affiliation as corresponding automatically.
+% Resource credit, in the exact wording FASRC requires
+% (rc.fas.harvard.edu/about/attribution/). Quoted rather than paraphrased: it is
+% a required attribution, so the wording is theirs to set, not ours.
+%
+% Venue-conditional because it names an institution. main_iclr.tex defines this
+% as empty -- under double-blind review the name would de-anonymise the
+% submission, and build_iclr.sh greps the rendered pdf for "Harvard" and fails
+% the build if it appears.
+\newcommand{\fsAcknowledgements}{%
+  \begin{acknowledgement}
+  The computations in this paper were run on the FASRC Cannon cluster supported
+  by the FAS Division of Science Research Computing Group at Harvard University.
+  \end{acknowledgement}}
+
+% One affiliation, because the author has one.
+%
+% Harvard is deliberately NOT listed here, though the work was run on its
+% cluster. An \altaffiliation renders as an affiliation, and an affiliation
+% asserts a departmental appointment; the author held an internship, not a
+% Harvard position, so listing "Department of Cellular and Molecular Biology,
+% Harvard University" under their name would misstate their status even though
+% every word of it is individually true.
+%
+% What Harvard provided was compute, and compute is credited in an
+% acknowledgement -- in FASRC's own required wording, see \fsAcknowledgements
+% below.
 \author{Ian Poon}
-\altaffiliation{Work carried out at the Department of Cellular and Molecular
-Biology, Harvard University, Cambridge, Massachusetts 02138, United States.}
 \affiliation{Department of Life Sciences, Imperial College London,
 London SW7 2AZ, United Kingdom}
 \email{ip323@ic.ac.uk}

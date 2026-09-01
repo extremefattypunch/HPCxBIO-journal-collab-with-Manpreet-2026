@@ -23,10 +23,17 @@
 Decision quality, cheap gates, and the baselines that must be beaten}
 \date{}
 
+% Plain-article build has no achemso acknowledgement environment, so the same
+% credit is emitted as an unnumbered section. Wording is FASRC's, not ours.
+\newcommand{\fsAcknowledgements}{%
+  \section*{Acknowledgement}
+  The computations in this paper were run on the FASRC Cannon cluster supported
+  by the FAS Division of Science Research Computing Group at Harvard University.}
+
 \begin{document}
 \maketitle
 \vspace{-3.5em}
-\authorblock{Ian Poon}{Imperial College London \\ Work carried out at Harvard University}
+\authorblock{Ian Poon}{Imperial College London}
 
 \input{body}
 

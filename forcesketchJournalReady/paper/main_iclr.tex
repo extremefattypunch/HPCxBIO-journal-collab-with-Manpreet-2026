@@ -5,9 +5,9 @@
 %
 % Double-blind: the class supplies the anonymous author block, so there is
 % deliberately no \authorblock call here -- that is the one line of main.tex that
-% names the author. The body carries no URLs, no names and no acknowledgements
-% (checked: the only identifying string in the original single-file manuscript was
-% the \authorblock line), so nothing else needs suppressing.
+% names the author. The body carries no URLs and no names, and it reaches its
+% acknowledgement only through \fsAcknowledgements, which this file defines as
+% empty (below), so nothing else needs suppressing.
 %
 % Page budget: ICLR allows 9 pages of main text with unlimited references and
 % appendices. The shared body already renders to 9 pages, so nothing is cut.
@@ -29,6 +29,13 @@
   \else
     an anonymised mirror, \url{\fsArtifactAnon}%
   \fi}
+
+% The acknowledgement credits Harvard's FASRC cluster by name, which would
+% de-anonymise the submission, so it is empty here rather than absent from the
+% body: the shared body calls \fsAcknowledgements unconditionally and every
+% wrapper must define it. build_iclr.sh independently greps the rendered pdf for
+% "Harvard" and fails if this ever regresses.
+\newcommand{\fsAcknowledgements}{}
 
 \title{When is committee force uncertainty worth computing in MD?\\
 Decision quality, cheap gates, and the baselines that must be beaten}
