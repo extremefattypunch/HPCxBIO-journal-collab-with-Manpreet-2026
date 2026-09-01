@@ -69,21 +69,24 @@ complete artifact - code, every raw experimental record, split manifests,
 pre-registered protocols, environment lockfile and manuscript source - is public at
 https://github.com/extremefattypunch/forcesketch (tag submission-v1), under the MIT
 licence for code and CC BY 4.0 for the records. Every numeric value in the text is
-generated from a committed experimental record rather than transcribed, and a procedural audit verifies that each still derives, that
-every pre-registered protocol is hash-bound to a registration record written before
-that experiment produced any artifact, and that every data split recomputes from
-its recorded seed. All statistical results regenerate on CPU in roughly four
+generated from a committed experimental record rather than transcribed, and a
+procedural audit verifies that each still derives, that every pre-registered
+protocol is hash-bound to a registration record written before that experiment
+produced any artifact, and that every data split recomputes from its recorded
+seed. All statistical results regenerate on CPU in roughly four
 minutes with no model execution and no downloads. The manuscript also contains a
 section disclosing the use of large language models in this work, along with the
 verification machinery that disclosure makes necessary.
 
-The manuscript is not under consideration elsewhere. A shorter version of the
-earlier, workshop-scale portion of this work has been submitted to machine-learning
-workshops, all of which are non-archival and none of which publishes proceedings;
-the present manuscript supersedes that material and contains substantial results
-not present in it, including the foundation-model and crystal experiments, the
-extensivity analysis, the deterministic estimator, and the finite-sample law. I am
-happy to provide further detail on that relationship if it would be useful.
+The manuscript is not under consideration elsewhere. For completeness, since it
+bears on eligibility: it was briefly submitted to ICLR 2027, which has archival
+proceedings, and I withdrew it before review began precisely so that it could be
+considered here without concurrent submission. Separately, a shorter workshop-scale
+version of the earlier portion of this work was submitted to several
+machine-learning workshops, all of them non-archival and none publishing
+proceedings; the present manuscript supersedes that material and adds the
+foundation-model and crystal experiments, the extensivity analysis, the
+deterministic estimator and the finite-sample law.
 
 I have no competing financial interests to declare. Thank you for considering the
 manuscript.
