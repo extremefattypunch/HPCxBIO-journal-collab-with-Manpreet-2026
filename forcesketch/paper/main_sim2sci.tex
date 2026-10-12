@@ -1,10 +1,26 @@
 \documentclass{article}
 
-% Sim2Science @ NeurIPS 2026. The call for papers REQUIRES these two lines --
-% "Submissions not using the required template may be desk-rejected" -- and
-% `dblblindworkshop' keeps \if@anonymous true, so the paper stays anonymous.
-\usepackage[dblblindworkshop]{neurips_2026}
-\workshoptitle{Sim2Science}
+% Sim2Science @ NeurIPS 2026, CAMERA-READY. The submission build loaded this
+% with `dblblindworkshop' alone, which left \if@anonymous true. The program
+% chairs' camera-ready email of 12 Oct 2026 gives both lines verbatim, including
+% the full workshop title, so they are reproduced exactly as issued:
+%
+%     \usepackage[dblblindworkshop, final]{neurips_2026}
+%     \workshoptitle{Sim2Science: ML with Imperfect Scientific Models}
+%
+%   * `final' sets \@neuripsfinaltrue and \@anonymousfalse (neurips_2026.sty:26).
+%     That de-anonymises the title block, drops the submission line numbers, and
+%     stops `ack' being \let to \hide (sty:411-413) so the acknowledgement renders.
+%   * `dblblindworkshop' must stay. Under `final' the footer notice is
+%     \@trackname (sty:396), and \@trackname is defined ONLY by the workshop and
+%     conference-track options (sty:88,92); `final' alone leaves it undefined and
+%     the build fails. The paper was reviewed double-blind, so this is the
+%     matching option, and its \@anonymoustrue is irrelevant because
+%     \DeclareOption bodies run in DECLARATION order under \ProcessOptions --
+%     `final' (sty:26) precedes `dblblindworkshop' (sty:90) whatever order the
+%     brackets list them in.
+\usepackage[dblblindworkshop, final]{neurips_2026}
+\workshoptitle{Sim2Science: ML with Imperfect Scientific Models}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -24,19 +40,45 @@
 % analysis/tables.py. Do not write a literal result into this file.
 \input{macros}
 
-% Anonymous artifact link. MUST be an anonymised host while under double-blind
-% review -- a github.com/<username> URL identifies the author and the call for
-% papers lists that as grounds for desk rejection. scripts/09_freeze.py refuses
-% to freeze while this still reads PLACEHOLDER.
-\newcommand{\fsCodeUrl}{https://anonymous.4open.science/r/forcesketch-artifact-65F3/README.md}
+% Camera-ready artifact link. The anonymous.4open.science mirror existed only to
+% keep the locator usable under double-blind review, where a github.com/<handle>
+% URL would have identified the author. The paper is de-anonymised now, so it
+% cites the repository itself -- the same locator the ML4Molecules camera-ready
+% and the journal build use (forcesketchJournalReady/paper/artifact.tex,
+% \fsArtifactLoc), so the builds cannot drift to different homes for one artifact.
+\newcommand{\fsCodeUrl}{https://github.com/extremefattypunch/forcesketch}
 
 \title{Force sketching in MD:\\
 Can we replace multi-head committees with screening\\
 methods for faster force uncertainty compute?}
 
-% Left deliberately empty: neurips_2026.sty typesets the anonymous author block
-% itself whenever the `final' option is absent, and ignores whatever is here.
-\author{}
+% De-anonymised for the camera-ready. Taken from the author's OpenReview profile
+% (~Ian_Poon1), which is the record this submission is filed against:
+%
+%   Career & Education History
+%     Undergrad Researcher, Department of Cellular and Molecular Biology,
+%       Harvard University (fas.harvard.edu), 2026 - 2027   <- current
+%     Undergrad student, Department of Bioengineering,
+%       Imperial College London (ic.ac.uk), 2023 - 2026      <- ended
+%   Emails: ian_poon@fas.harvard.edu (confirmed, PREFERRED)
+%
+% So Harvard is the current appointment and the preferred contact address is the
+% FAS one. Note that ip323@ic.ac.uk does not appear on the profile at all.
+%
+% Commit d60ce15 removed Harvard as an affiliation from the journal build,
+% describing the position as an internship. That is superseded here by the
+% profile above; the JCTC/ICLR builds should be reconciled with this wrapper
+% rather than left to disagree.
+%
+% This matches main_ml4mol.tex exactly -- one author, one affiliation, across
+% both camera-readies.
+\author{%
+  Ian Poon \\
+  Department of Cellular and Molecular Biology \\
+  Harvard University \\
+  Cambridge, MA 02138, United States \\
+  \texttt{ian\_poon@fas.harvard.edu} \\
+}
 
 \begin{document}
 
@@ -338,9 +380,22 @@ measured, so we claim no gain in model quality or oracle-query efficiency. Commi
 only a proxy for error; calibration is marginal and under exchangeability; $M{=}8$ bounds the maximum
 saving; and rMD17 spans only 9--24 atoms.
 
+% FASRC requires this attribution, in their own wording, for any paper whose
+% computations ran on Cannon <https://www.rc.fas.harvard.edu/about/attribution/>.
+% The `ack' environment is \let to \hide unless `final' is set
+% (neurips_2026.sty:413), so this renders only in the camera-ready build and
+% silently vanishes if the option is ever dropped.
+\begin{ack}
+The computations in this paper were run on the FASRC Cannon cluster supported by
+the FAS Division of Science Research Computing Group at Harvard University.
+\end{ack}
+
 \bibliographystyle{plainnat}
 \bibliography{references}
 
+% Required by the Sim2Sci camera-ready instructions: "must include the official
+% and complete NeurIPS checklist". Sits after the references and before the
+% appendix, so it falls outside the five-page limit.
 \input{checklist_neurips.tex}
 
 \appendix

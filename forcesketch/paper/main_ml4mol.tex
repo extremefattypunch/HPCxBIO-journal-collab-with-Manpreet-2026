@@ -1,18 +1,22 @@
 \documentclass{article}
 
-% Official NeurIPS 2026 style, loaded with NO options. This is deliberate and
-% venue-neutral, so one PDF can go to more than one workshop:
-%   * `final' and `preprint' are omitted, which the call for papers requires --
-%     \if@anonymous defaults TRUE, so the anonymous author block still applies;
-%   * `dblblindworkshop' is also omitted. In this style file \if@workshop is read
-%     in exactly one place (neurips_2026.sty:401), the footer notice, and gates
-%     nothing else -- not anonymity. With it, the footer names one workshop;
-%     without it, the footer reads "Submitted to 40th Conference on Neural
-%     Information Processing Systems (NeurIPS 2026). Do not distribute."
-% SIMBIOCHEM II asks only that `final' and `preprint' be omitted, does not
-% require its name in the footer, and is non-archival and explicitly welcomes
-% work "currently under review elsewhere".
-\usepackage{neurips_2026}
+% Official NeurIPS 2026 style, CAMERA-READY for ML4Molecules. The submission
+% build loaded this with no options at all, which left \if@anonymous true.
+%   * `final' sets \@neuripsfinaltrue and \@anonymousfalse (neurips_2026.sty:26).
+%     That does three things a camera-ready needs at once: the style stops
+%     typesetting its own anonymous block and typesets \author instead; the
+%     submission line numbers go away; and the `ack' environment stops being
+%     \let to \hide (sty:413), so the acknowledgement below actually renders.
+%   * `dblblindworkshop' is required alongside it, not optional. Under `final'
+%     the footer notice is \@trackname (sty:398), and \@trackname is defined
+%     ONLY by the two workshop options (sty:88,92) and the conference-track
+%     options; `final' on its own would leave it undefined and the build would
+%     fail. The paper was reviewed double-blind, so this is the matching option.
+%     Its anonymity is harmless here: \DeclareOption bodies run in declaration
+%     order under \ProcessOptions, and `final' (sty:26) precedes
+%     `dblblindworkshop' (sty:90), which never touches \if@anonymous anyway.
+\usepackage[final,dblblindworkshop]{neurips_2026}
+\workshoptitle{NeurIPS 2026 Workshop on Agentic Systems for Molecular Sciences}
 
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
@@ -32,19 +36,45 @@
 % analysis/tables.py. Do not write a literal result into this file.
 \input{macros}
 
-% Anonymous artifact link. MUST be an anonymised host while under double-blind
-% review -- a github.com/<username> URL identifies the author and the call for
-% papers lists that as grounds for desk rejection. scripts/09_freeze.py refuses
-% to freeze while this still reads PLACEHOLDER.
-\newcommand{\fsCodeUrl}{https://anonymous.4open.science/r/forcesketch-artifact-65F3/README.md}
+% Camera-ready artifact link. The anonymous.4open.science mirror existed only to
+% keep the locator usable under double-blind review, where a github.com/<handle>
+% URL would have identified the author. The paper is de-anonymised now, so it
+% cites the repository itself -- the same locator the journal build uses
+% (forcesketchJournalReady/paper/artifact.tex, \fsArtifactLoc), so the two builds
+% cannot drift to different homes for the same artifact.
+\newcommand{\fsCodeUrl}{https://github.com/extremefattypunch/forcesketch}
 
 \title{Force sketching in MD:\\
 Can we replace multi-head committees with screening\\
 methods for faster force uncertainty compute?}
 
-% Left deliberately empty: neurips_2026.sty typesets the anonymous author block
-% itself whenever the `final' option is absent, and ignores whatever is here.
-\author{}
+% De-anonymised for the camera-ready. Taken from the author's OpenReview profile
+% (~Ian_Poon1), which is the record this submission is filed against:
+%
+%   Career & Education History
+%     Undergrad Researcher, Department of Cellular and Molecular Biology,
+%       Harvard University (fas.harvard.edu), 2026 - 2027   <- current
+%     Undergrad student, Department of Bioengineering,
+%       Imperial College London (ic.ac.uk), 2023 - 2026      <- ended
+%   Emails: ian_poon@fas.harvard.edu (confirmed, PREFERRED)
+%
+% So Harvard is the current appointment and the preferred contact address is the
+% FAS one. Note that ip323@ic.ac.uk does not appear on the profile at all.
+%
+% Commit d60ce15 removed Harvard as an affiliation from the journal build,
+% describing the position as an internship. That is superseded here by the
+% profile above; the JCTC/ICLR builds should be reconciled with this wrapper
+% rather than left to disagree.
+%
+% The FASRC acknowledgement below stands regardless -- FASRC requires the
+% attribution for Cannon use independently of affiliation.
+\author{%
+  Ian Poon \\
+  Department of Cellular and Molecular Biology \\
+  Harvard University \\
+  Cambridge, MA 02138, United States \\
+  \texttt{ian\_poon@fas.harvard.edu} \\
+}
 
 \begin{document}
 
@@ -344,6 +374,21 @@ slowdown, so this suits batched active-learning sweeps, not single-structure MD.
 measured, so we claim no gain in model quality or oracle-query efficiency. Committee disagreement is
 only a proxy for error; calibration is marginal and under exchangeability; $M{=}8$ bounds the maximum
 saving; and rMD17 spans only 9--24 atoms.
+
+% Resource credit, in the exact wording FASRC requires
+% (rc.fas.harvard.edu/about/attribution/). Quoted rather than paraphrased: a
+% required attribution's wording belongs to them, not to us. This credits the
+% Cannon cluster as a resource; it is required for Cannon use independently of
+% the author's affiliation, so it stands alongside the Harvard title block
+% rather than substituting for it (see the \author comment above).
+%
+% The `ack' environment is \let to \hide unless `final' is set
+% (neurips_2026.sty:413), so this renders only in the camera-ready build and
+% silently vanishes if the option is ever dropped.
+\begin{ack}
+The computations in this paper were run on the FASRC Cannon cluster supported by
+the FAS Division of Science Research Computing Group at Harvard University.
+\end{ack}
 
 \bibliographystyle{plainnat}
 \bibliography{references}
