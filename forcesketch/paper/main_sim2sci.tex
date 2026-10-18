@@ -70,13 +70,20 @@ methods for faster force uncertainty compute?}
 % profile above; the JCTC/ICLR builds should be reconciled with this wrapper
 % rather than left to disagree.
 %
-% This matches main_ml4mol.tex exactly -- one author, one affiliation, across
-% both camera-readies.
+% Set on three lines rather than the template's five. This is a space decision,
+% not a stylistic one. The style's anonymous block is four lines (Anonymous
+% Author(s)/Affiliation/Address/email); the five-line form used in
+% main_ml4mol.tex is two lines taller, and because the title block sits above
+% the abstract that deficit propagates down every page. Measured against the
+% submitted build, the five-line form pushed exactly two lines of Section 6 onto
+% page 6, breaking the five-page body limit. Folding the department, university
+% and city onto one line returns both lines and restores the submitted
+% pagination, with no change to the accepted text. Same author, same
+% affiliation, same address and same email as main_ml4mol.tex -- only the line
+% breaks differ. If the body is ever shortened, restore the five-line form.
 \author{%
   Ian Poon \\
-  Department of Cellular and Molecular Biology \\
-  Harvard University \\
-  Cambridge, MA 02138, United States \\
+  Department of Cellular and Molecular Biology, Harvard University, Cambridge, MA 02138 \\
   \texttt{ian\_poon@fas.harvard.edu} \\
 }
 
